@@ -1,18 +1,333 @@
-# Database
+# Redis 7.4.6 to ElastiCache for Valkey 8.2 Online Migration Test Environment
 
-Aurora, DynamoDB, RDS 등 데이터베이스 관련 데모 및 샘플 코드
+AWS ElastiCache Online Migration 기능을 검증하기 위한 종합적인 테스트 환경입니다. Redis 7.4.6에서 ElastiCache for Valkey 8.2로의 온라인 마이그레이션 가능성을 실제 AWS 환경에서 테스트할 수 있습니다.
 
-## 대표 서비스
+## 📋 개요
 
-- Amazon Aurora
-- Amazon DynamoDB
-- Amazon RDS
-- Amazon ElastiCache
-- Amazon MemoryDB
-- Amazon DocumentDB
+이 프로젝트는 AWS CDK(Cloud Development Kit) TypeScript를 사용하여 Redis에서 Valkey로의 온라인 마이그레이션을 테스트하기 위한 완전한 인프라를 제공합니다. 실제 프로덕션 환경과 유사한 설정으로 마이그레이션 호환성을 검증할 수 있습니다.
 
-## 프로젝트 목록
+### 주요 기능
 
-| 프로젝트 | 설명 | 서비스 |
-|---------|------|--------|
-| - | - | - |
+- **완전 자동화된 인프라**: CDK를 통한 원클릭 배포
+- **프로덕션 유사 환경**: Multi-AZ, 보안 그룹, VPC 등 실제 환경 구성
+- **온라인 마이그레이션 최적화**: AWS 요구사항에 맞춘 설정
+- **보안 접근**: EC2 Instance Connect Endpoint를 통한 안전한 접근
+- **종합 모니터링**: CloudWatch 메트릭 및 로깅 지원
+
+## 🏗️ 아키텍처
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                                    VPC                                      │
+│                              10.0.0.0/16                                   │
+│                                                                             │
+│  ┌─────────────────────────────┐    ┌─────────────────────────────────────┐ │
+│  │      Public Subnet A        │    │         Public Subnet B             │ │
+│  │       10.0.1.0/24           │    │          10.0.3.0/24                │ │
+│  │                             │    │                                     │ │
+│  │    ┌─────────────────┐      │    │                                     │ │
+│  │    │   NAT Gateway   │      │    │                                     │ │
+│  │    └─────────────────┘      │    │                                     │ │
+│  └─────────────────────────────┘    └─────────────────────────────────────┘ │
+│                                                                             │
+│  ┌─────────────────────────────┐    ┌─────────────────────────────────────┐ │
+│  │     Private Subnet A        │    │        Private Subnet B             │ │
+│  │       10.0.2.0/24           │    │          10.0.4.0/24                │ │
+│  │                             │    │                                     │ │
+│  │  ┌─────────────────────┐    │    │  ┌─────────────────────────────────┐│ │
+│  │  │       EC2           │    │    │  │     ElastiCache Valkey          ││ │
+│  │  │   Redis 7.4.6       │◄───┼────┼──┤        8.2 Cluster              ││ │
+│  │  │   t3.medium         │    │    │  │                                 ││ │
+│  │  │                     │    │    │  │  ┌─────────────────────────────┐││ │
+│  │  └─────────────────────┘    │    │  │  │ Primary Node (cache.t3.med) │││ │
+│  │                             │    │  │  └─────────────────────────────┘││ │
+│  │  ┌─────────────────────┐    │    │  │  ┌─────────────────────────────┐││ │
+│  │  │ EC2 Instance Connect│    │    │  │  │ Replica Node (cache.t3.med) │││ │
+│  │  │     Endpoint        │    │    │  │  └─────────────────────────────┘││ │
+│  │  └─────────────────────┘    │    │  └─────────────────────────────────┘│ │
+│  └─────────────────────────────┘    └─────────────────────────────────────┘ │
+│                                                                             │
+│                          Migration Flow (Port 6379)                        │
+│                     Redis ──────X──────► ElastiCache                       │
+│                           (RDB 호환성 실패)                                  │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+## 🛠️ 기술 스택
+
+| 영역 | 기술 | 버전 | 용도 |
+|------|------|------|------|
+| **Infrastructure** | AWS CDK | 2.215.0 | 인프라 코드 관리 |
+| **Language** | TypeScript | 5.9.3 | CDK 구현 언어 |
+| **Source Database** | Redis | 7.4.6 | 마이그레이션 원본 |
+| **Target Database** | ElastiCache Valkey | 8.2 | 마이그레이션 대상 |
+| **Compute** | Amazon EC2 | t3.medium | Redis 호스팅 |
+| **Cache** | ElastiCache | cache.t3.medium | Valkey 클러스터 |
+| **Network** | Amazon VPC | - | 네트워크 격리 |
+| **Security** | Security Groups | - | 방화벽 규칙 |
+| **Access** | EC2 Instance Connect | - | 보안 접근 |
+| **Testing** | Jest | 29.7.0 | 단위 테스트 |
+
+## 🚀 시작하기
+
+### 사전 요구사항
+
+- **Node.js**: 18.x 이상
+- **AWS CLI**: 2.x 이상, 구성 완료
+- **AWS CDK**: 2.x 이상 (`npm install -g aws-cdk`)
+- **AWS 계정**: 적절한 권한 설정
+- **Git**: 버전 관리
+
+### 설치
+
+```bash
+# 1. 저장소 클론
+git clone <repository-url>
+cd valkey-migration
+
+# 2. 의존성 설치
+npm install
+
+# 3. TypeScript 컴파일
+npm run build
+
+# 4. CDK 부트스트랩 (최초 1회)
+cdk bootstrap
+```
+
+### 배포
+
+```bash
+# 1. CDK 구문 검증
+cdk synth
+
+# 2. 변경사항 확인
+cdk diff
+
+# 3. 인프라 배포
+cdk deploy
+
+# 배포 완료 후 출력값 확인
+# - EC2InstanceId: EC2 인스턴스 ID
+# - RedisPrivateIp: Redis 서버 IP
+# - ValkeyPrimaryEndpoint: ElastiCache 엔드포인트
+# - ValkeyReplicationGroupId: 마이그레이션용 그룹 ID
+```
+
+### 마이그레이션 테스트
+
+```bash
+# 1. EC2 인스턴스 접속 (Instance Connect 사용)
+aws ec2-instance-connect send-ssh-public-key \
+    --instance-id <EC2_INSTANCE_ID> \
+    --availability-zone <AZ> \
+    --instance-os-user ec2-user \
+    --ssh-public-key file://~/.ssh/id_rsa.pub
+
+ssh ec2-user@<REDIS_PRIVATE_IP>
+
+# 2. Redis 상태 확인
+redis-cli ping
+redis-cli info replication
+
+# 3. 테스트 데이터 생성
+redis-cli SET user:1 "Alice"
+redis-cli SET user:2 "Bob"
+redis-cli SET counter 100
+
+# 4. 온라인 마이그레이션 시작
+aws elasticache start-migration \
+    --replication-group-id <REPLICATION_GROUP_ID> \
+    --customer-node-endpoint-list "Address='<REDIS_PRIVATE_IP>',Port=6379" \
+    --region us-east-1
+
+# 5. 마이그레이션 상태 확인
+aws elasticache describe-replication-groups \
+    --replication-group-id <REPLICATION_GROUP_ID>
+```
+
+### 정리
+
+```bash
+# 모든 리소스 삭제
+cdk destroy
+
+# 확인 프롬프트에서 'y' 입력
+```
+
+## 📊 테스트 결과 요약
+
+| 항목 | 결과 | 상세 |
+|------|------|------|
+| **마이그레이션 상태** | ❌ **실패** | RDB 포맷 비호환성 |
+| **테스트 일시** | 2026-01-18 21:00 KST | 실제 AWS 환경 테스트 |
+| **실패 원인** | `invalid RDB received` | Redis 7.4.6 ↔ Valkey 8.2 호환성 문제 |
+| **네트워크 연결** | ✅ 성공 | ElastiCache가 Redis에 정상 연결 |
+| **인증/보안** | ✅ 성공 | 모든 보안 요구사항 충족 |
+| **데이터 전송** | ⚠️ 부분 성공 | RDB 전송 완료, 파싱 실패 |
+
+> 📖 **상세 분석**: [테스트 결과 문서](./docs/test-result.md)에서 전체 로그와 분석 내용을 확인하세요.
+
+## 🔧 프로젝트 구조
+
+```
+valkey-migration/
+├── bin/                    # CDK 앱 진입점
+│   └── valkey-migration.ts
+├── lib/                    # CDK 스택 구현
+│   └── valkey-migration-stack.ts
+├── test/                   # 단위 테스트
+│   └── valkey-migration.test.ts
+├── docs/                   # 프로젝트 문서
+│   ├── architecture.md     # 아키텍처 상세 설명
+│   ├── development.md      # 개발 가이드
+│   ├── migration-guide.md  # 마이그레이션 절차
+│   ├── progress.md         # 프로젝트 진행 상황
+│   ├── test-result.md      # 테스트 결과 분석
+│   └── qa/                 # QA 테스트 리포트
+├── cdk.json               # CDK 설정
+├── package.json           # Node.js 의존성
+├── tsconfig.json          # TypeScript 설정
+└── README.md              # 프로젝트 개요 (현재 파일)
+```
+
+## 📚 문서
+
+- **[아키텍처 가이드](./docs/architecture.md)**: 시스템 설계 및 컴포넌트 상세 설명
+- **[개발 가이드](./docs/development.md)**: 로컬 개발 환경 설정 및 코딩 컨벤션
+- **[마이그레이션 가이드](./docs/migration-guide.md)**: 단계별 마이그레이션 절차
+- **[테스트 결과](./docs/test-result.md)**: 실제 마이그레이션 테스트 결과 및 분석
+- **[진행 상황](./docs/progress.md)**: 프로젝트 개발 히스토리 및 현재 상태
+
+## 🔍 유용한 명령어
+
+### 개발 및 테스트
+
+```bash
+# TypeScript 컴파일 (watch 모드)
+npm run watch
+
+# 단위 테스트 실행
+npm test
+
+# CDK 구문 검증
+cdk synth
+
+# 배포 전 변경사항 미리보기
+cdk diff
+```
+
+### AWS 리소스 관리
+
+```bash
+# ElastiCache 클러스터 상태 확인
+aws elasticache describe-replication-groups \
+    --replication-group-id <group-id>
+
+# EC2 인스턴스 상태 확인
+aws ec2 describe-instances \
+    --instance-ids <instance-id>
+
+# CloudWatch 로그 확인
+aws logs describe-log-groups \
+    --log-group-name-prefix "/aws/elasticache"
+```
+
+### Redis 관리
+
+```bash
+# Redis 서버 상태 확인
+redis-cli info server
+
+# 메모리 사용량 확인
+redis-cli info memory
+
+# 복제 상태 확인
+redis-cli info replication
+
+# 모든 키 조회
+redis-cli keys "*"
+```
+
+## ⚠️ 중요 고려사항
+
+### 보안
+
+- **테스트 환경 전용**: 이 설정은 마이그레이션 테스트를 위해 보안이 완화되어 있습니다
+- **프로덕션 적용 금지**: 실제 환경에서는 추가 보안 강화가 필요합니다
+- **접근 제한**: EC2 Instance Connect Endpoint를 통해서만 접근 가능합니다
+
+### 비용
+
+| 리소스 | 타입 | 예상 비용 (월간) |
+|--------|------|------------------|
+| EC2 인스턴스 | t3.medium | ~$30 |
+| ElastiCache | cache.t3.medium × 2 | ~$60 |
+| NAT Gateway | 단일 AZ | ~$45 |
+| 기타 네트워킹 | VPC, 보안 그룹 등 | ~$5 |
+| **총 예상 비용** | | **~$140/월** |
+
+> ⚡ **비용 절약**: 테스트 완료 후 즉시 `cdk destroy`로 리소스를 정리하세요.
+
+### 제한사항
+
+- **마이그레이션 호환성**: Redis 7.4.6과 Valkey 8.2 간 RDB 포맷 비호환
+- **지원 버전**: AWS Online Migration은 특정 버전 범위만 지원
+- **데이터 크기**: 대용량 데이터셋의 경우 마이그레이션 시간이 길어질 수 있음
+
+## 🔄 대안 마이그레이션 방법
+
+Redis 7.4.6에서 ElastiCache Valkey로의 마이그레이션이 필요한 경우:
+
+1. **Snapshot/Restore**: RDB 덤프를 S3에 업로드 후 ElastiCache에서 복원
+2. **Application-level**: 애플리케이션 레벨에서 데이터 복사
+3. **redis-dump-load**: JSON 형태로 데이터 내보내기/가져오기
+4. **단계적 마이그레이션**: 중간 버전을 경유한 점진적 업그레이드
+
+## 📞 지원 및 기여
+
+### 이슈 리포팅
+
+문제가 발생하거나 개선 사항이 있다면 GitHub Issues를 통해 알려주세요:
+
+1. 문제 상황 상세 설명
+2. 재현 단계
+3. 예상 결과 vs 실제 결과
+4. 환경 정보 (AWS 리전, CDK 버전 등)
+
+### 기여 방법
+
+1. Fork 후 feature 브랜치 생성
+2. 변경사항 구현 및 테스트
+3. 문서 업데이트
+4. Pull Request 제출
+
+## 📖 참고 자료
+
+### AWS 공식 문서
+
+- [ElastiCache Online Migration](https://docs.aws.amazon.com/AmazonElastiCache/latest/red-ug/OnlineMigration.html)
+- [ElastiCache for Valkey](https://docs.aws.amazon.com/AmazonElastiCache/latest/val-ug/)
+- [AWS CDK Developer Guide](https://docs.aws.amazon.com/cdk/v2/guide/)
+
+### Redis/Valkey 문서
+
+- [Redis Documentation](https://redis.io/documentation)
+- [Valkey Documentation](https://valkey.io/docs/)
+- [RDB File Format](https://github.com/sripathikrishnan/redis-rdb-tools/wiki/Redis-RDB-Dump-File-Format)
+
+### 관련 도구
+
+- [redis-cli](https://redis.io/docs/ui/cli/)
+- [AWS CLI](https://aws.amazon.com/cli/)
+- [CDK Toolkit](https://docs.aws.amazon.com/cdk/v2/guide/cli.html)
+
+## 📄 라이선스
+
+이 프로젝트는 MIT 라이선스 하에 배포됩니다. 자세한 내용은 [LICENSE](LICENSE) 파일을 참조하세요.
+
+---
+
+**⚡ 빠른 시작**: `npm install && npm run build && cdk deploy`
+
+**📧 문의**: 프로젝트 관련 문의사항은 GitHub Issues를 이용해 주세요.
