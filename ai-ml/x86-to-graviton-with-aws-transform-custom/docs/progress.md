@@ -48,6 +48,8 @@ atx custom def exec \
 - `README.md` - 배포 가이드
 - `CI-CD-INTEGRATION-GUIDE.md` - CI/CD 통합 가이드
 - `arm64-compatibility-analysis-step1.md` ~ `step8.md` - 단계별 분석 문서
+
+> **실제 결과물 확인**: [`transformation-results/`](../transformation-results/) 폴더에 정리된 결과물이 있습니다.
 - `validate-arm64-build.sh` - 빌드 검증 스크립트
 - `test-arm64-functional.sh` - 기능 테스트 스크립트
 - `test-arm64-performance.sh` - 성능 테스트 스크립트

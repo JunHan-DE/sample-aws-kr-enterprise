@@ -121,6 +121,8 @@ atx custom def exec \
 
 변환 완료 후 프로젝트에 다음 파일들이 생성됩니다:
 
+> **참고**: 이 프로젝트의 실제 변환 결과물은 [`transformation-results/`](../transformation-results/) 폴더에서 확인할 수 있습니다.
+
 ```
 your-project/
 ├── ARM64-COMPATIBILITY-REPORT.md    # 최종 호환성 보고서

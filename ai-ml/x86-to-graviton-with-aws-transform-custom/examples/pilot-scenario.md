@@ -114,6 +114,8 @@ cat ARM64-COMPATIBILITY-REPORT.md
 - CI/CD 가이드 (`CI-CD-INTEGRATION-GUIDE.md`)
 - 검증 스크립트 3개 (`.sh` 파일)
 
+> **실제 결과 예시**: 이 프로젝트의 [`transformation-results/`](../transformation-results/) 폴더에서 실제 변환 결과물을 확인할 수 있습니다.
+
 ## Phase 3: 검증
 
 ### 3.1 빌드 검증

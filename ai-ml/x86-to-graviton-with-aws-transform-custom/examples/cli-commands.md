@@ -325,6 +325,8 @@ ls ~/.aws/atx/logs/
 | `test-arm64-performance.sh` | 성능 테스트 스크립트 |
 | `arm64-*.md` | 단계별 분석 문서 |
 
+> **실제 결과물 예시**: 이 프로젝트의 [`transformation-results/`](../transformation-results/) 폴더에서 실제 변환 결과물을 확인할 수 있습니다.
+
 ## 문제 해결
 
 ### Git 저장소 오류

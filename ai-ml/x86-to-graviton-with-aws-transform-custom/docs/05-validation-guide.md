@@ -20,6 +20,8 @@
 
 Transform Custom 실행 후 자동 생성되는 검증 스크립트를 활용하세요:
 
+> **참고**: 이 프로젝트의 실제 검증 스크립트와 결과물은 [`transformation-results/`](../transformation-results/) 폴더에서 확인할 수 있습니다.
+
 ```bash
 # 빌드 검증
 chmod +x validate-arm64-build.sh
