@@ -1,0 +1,24 @@
+spring:
+  application:
+    name: graviton-demo
+
+server:
+  port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+  info:
+    env:
+      enabled: true
+
+info:
+  app:
+    name: ${spring.application.name}
+    description: Sample application for x86 to Graviton migration
+    version: 1.0.0

@@ -1,0 +1,38 @@
+# Build outputs
+target/
+build/
+*.class
+*.jar
+*.war
+
+# IDE
+.idea/
+*.iml
+.vscode/
+*.swp
+
+# Node.js
+node_modules/
+package-lock.json
+
+# CDK
+cdk.out/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+*.txt
+!README.txt
+
+# Temp files
+*.tmp
+*.bak
+
+# AWS
+.aws/
+
+# Claude
+.claude/

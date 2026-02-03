@@ -1,0 +1,27 @@
+{
+  "name": "graviton-migration-infra",
+  "version": "1.0.0",
+  "description": "AWS CDK infrastructure for x86 to Graviton migration",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w",
+    "cdk": "cdk",
+    "deploy:all": "cdk deploy --all",
+    "deploy:vpc": "cdk deploy VpcStack",
+    "deploy:ecr": "cdk deploy EcrStack",
+    "deploy:x86": "cdk deploy Ec2X86Stack",
+    "deploy:graviton": "cdk deploy Ec2GravitonStack",
+    "destroy:all": "cdk destroy --all",
+    "diff": "cdk diff",
+    "synth": "cdk synth"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "typescript": "^5.3.0",
+    "aws-cdk": "^2.120.0"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "^2.120.0",
+    "constructs": "^10.3.0"
+  }
+}
