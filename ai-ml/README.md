@@ -1,17 +1,23 @@
 # AI/ML
 
-Bedrock, SageMaker 등 AI/ML 관련 데모 및 샘플 코드
+AWS의 AI/ML 서비스를 활용한 데모 및 샘플 코드 모음입니다. Amazon Bedrock을 통한 생성형 AI 애플리케이션 구축부터, Amazon SageMaker 기반의 머신러닝 모델 학습 및 배포, 그리고 Amazon Rekognition, Textract 등 사전 학습된 AI 서비스 활용까지 다양한 시나리오를 다룹니다. 엔터프라이즈 환경에서 AI/ML 워크로드를 효과적으로 구현하기 위한 아키텍처 패턴과 모범 사례를 제공합니다.
 
 ## 대표 서비스
 
-- Amazon Bedrock
-- Amazon SageMaker
-- Amazon Nova
-- Amazon Rekognition
-- Amazon Textract
+- [Amazon Bedrock](https://aws.amazon.com/ko/bedrock/) - 파운데이션 모델을 활용한 생성형 AI 애플리케이션 및 에이전트 구축 플랫폼
+- [Amazon SageMaker](https://aws.amazon.com/ko/sagemaker/) - 데이터, 분석, AI를 위한 통합 머신러닝 플랫폼
+- [Amazon Nova](https://aws.amazon.com/ko/nova/) - 빠르고 비용 효율적인 파운데이션 모델 포트폴리오
+- [Amazon Rekognition](https://aws.amazon.com/ko/rekognition/) - ML 기반 이미지 인식 및 비디오 분석 서비스
+- [Amazon Textract](https://aws.amazon.com/ko/textract/) - 문서에서 텍스트, 필기, 데이터를 자동 추출하는 ML 서비스
 
 ## 프로젝트 목록
 
 | 프로젝트 | 설명 | 주요 서비스 |
 |---------|------|------------|
 | [x86-to-graviton-with-aws-transform-custom](./x86-to-graviton-with-aws-transform-custom/) | AWS Transform Custom을 활용한 x86 Java 애플리케이션의 Graviton(ARM64) 전환 가이드. Spring Boot 3.2.1 샘플앱 대상, atx CLI v1.1.1 사용, 8단계 변환 프로세스 100% 완료 | AWS Transform Custom, Amazon EC2 (Graviton) |
+
+## 참고 리소스
+
+- [AWS AI/ML 서비스 소개](https://aws.amazon.com/ko/ai/machine-learning/) - AWS 기계 학습 서비스 전체 소개 및 고객 사례
+- [Amazon Bedrock 사용 설명서](https://docs.aws.amazon.com/ko_kr/bedrock/latest/userguide/what-is-bedrock.html) - Amazon Bedrock 공식 기술 문서
+- [Amazon SageMaker 사용 설명서](https://docs.aws.amazon.com/ko_kr/sagemaker/latest/dg/whatis.html) - Amazon SageMaker 공식 기술 문서
