@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+
+# Build output
+.next/
+cdk.out/
+*.tsbuildinfo
+
+# CDK context (contains account-specific VPC/subnet info)
+cdk/cdk.context.json
+
+# Environment files
+.env
+.env.*
+
+# Claude Code local settings
+.claude/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
