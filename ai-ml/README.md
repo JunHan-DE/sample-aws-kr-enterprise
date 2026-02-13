@@ -14,6 +14,7 @@ AWS의 AI/ML 서비스를 활용한 데모 및 샘플 코드 모음입니다. Am
 
 | 프로젝트 | 설명 | 주요 서비스 |
 |---------|------|------------|
+| [bedrock-detailed-monitoring-dashboard](./bedrock-detailed-monitoring-dashboard/) | Amazon Bedrock Claude 모델 사용량과 비용을 실시간 모니터링하는 웹 대시보드. CloudWatch 메트릭 기반 7개 모델 추적, 4단계 집계(분/시/일/월), 캐시 절감 분석, 월말 비용 예측 | Amazon Bedrock, CloudFront, ECS Fargate, DynamoDB, Lambda |
 | [x86-to-graviton-with-aws-transform-custom](./x86-to-graviton-with-aws-transform-custom/) | AWS Transform Custom을 활용한 x86 Java 애플리케이션의 Graviton(ARM64) 전환 가이드. Spring Boot 3.2.1 샘플앱 대상, atx CLI v1.1.1 사용, 8단계 변환 프로세스 100% 완료 | AWS Transform Custom, Amazon EC2 (Graviton) |
 
 ## 참고 리소스
