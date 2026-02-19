@@ -127,7 +127,7 @@ HTTP(80) 리스너만 구성되어 있으며(CloudFront가 TLS 종단), `/api/he
 ### 메트릭 수집 흐름 (1분 주기)
 
 1. **EventBridge**가 1분마다 Lambda Aggregator를 호출합니다.
-2. **Lambda**가 CloudWatch `AWS/Bedrock` 네임스페이스에서 7개 모델의 6가지 메트릭을 조회합니다 (최근 2분 윈도우).
+2. **Lambda**가 CloudWatch `AWS/Bedrock` 네임스페이스에서 8개 모델의 6가지 메트릭을 조회합니다 (최근 2분 윈도우).
 3. **Lambda**가 모델별 비용과 캐시 절감액을 계산합니다 (모델 패밀리별 가격 체계 적용).
 4. **Lambda**가 DynamoDB에 4단계 레코드를 기록합니다:
    - `METRIC#minute` 레코드: 1분 스냅샷 (PUT)

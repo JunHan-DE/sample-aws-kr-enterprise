@@ -421,6 +421,7 @@ interface CostForecast {
 | `global.anthropic.claude-opus-4-6-v1` | Claude Opus 4.6 |
 | `global.anthropic.claude-opus-4-5-20251101-v1:0` | Claude Opus 4.5 |
 | `us.anthropic.claude-opus-4-5-20251101-v1:0` | Claude Opus 4.5 (US) |
+| `global.anthropic.claude-sonnet-4-6` | Claude Sonnet 4.6 |
 | `global.anthropic.claude-sonnet-4-5-20250929-v1:0` | Claude Sonnet 4.5 |
 | `global.anthropic.claude-haiku-4-5-20251001-v1:0` | Claude Haiku 4.5 |
 | `us.anthropic.claude-haiku-4-5-20251001-v1:0` | Claude Haiku 4.5 (US) |

@@ -12,6 +12,7 @@ export const MODEL_PRICING: Record<string, ModelPricing> = {
   // Global Cross-region Inference — AWS Bedrock (US East - N. Virginia) On-Demand pricing
   'global.anthropic.claude-opus-4-6-v1': { name: 'Claude Opus 4.6', shortName: 'Opus 4.6', family: 'opus', input: 5, output: 25, cacheWrite: 6.25, cacheRead: 0.50 },
   'global.anthropic.claude-opus-4-5-20251101-v1:0': { name: 'Claude Opus 4.5', shortName: 'Opus 4.5', family: 'opus', input: 5, output: 25, cacheWrite: 6.25, cacheRead: 0.50 },
+  'global.anthropic.claude-sonnet-4-6': { name: 'Claude Sonnet 4.6', shortName: 'Sonnet 4.6', family: 'sonnet', input: 3, output: 15, cacheWrite: 3.75, cacheRead: 0.30 },
   'global.anthropic.claude-sonnet-4-5-20250929-v1:0': { name: 'Claude Sonnet 4.5', shortName: 'Sonnet 4.5', family: 'sonnet', input: 3, output: 15, cacheWrite: 3.75, cacheRead: 0.30 },
   'global.anthropic.claude-haiku-4-5-20251001-v1:0': { name: 'Claude Haiku 4.5', shortName: 'Haiku 4.5', family: 'haiku', input: 1, output: 5, cacheWrite: 1.25, cacheRead: 0.10 },
   // Geo / In-region Cross-region Inference — 10% premium over Global

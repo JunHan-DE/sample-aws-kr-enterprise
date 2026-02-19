@@ -4,7 +4,7 @@ Amazon Bedrock에서 Claude 모델 사용량과 비용을 실시간으로 모니
 
 ## 개요
 
-Claude Code와 같은 AI 코딩 도구가 Amazon Bedrock을 통해 Claude 모델을 호출할 때 발생하는 토큰 사용량, 비용, 레이턴시를 1분 단위로 자동 수집하여 시각화합니다. CloudWatch 메트릭을 기반으로 7개 Claude 모델의 사용 현황을 추적하고, 캐시 절감 분석과 월말 비용 예측 기능을 제공합니다.
+Claude Code와 같은 AI 코딩 도구가 Amazon Bedrock을 통해 Claude 모델을 호출할 때 발생하는 토큰 사용량, 비용, 레이턴시를 1분 단위로 자동 수집하여 시각화합니다. CloudWatch 메트릭을 기반으로 8개 Claude 모델의 사용 현황을 추적하고, 캐시 절감 분석과 월말 비용 예측 기능을 제공합니다.
 
 ## 주요 기능
 
@@ -13,7 +13,7 @@ Claude Code와 같은 AI 코딩 도구가 Amazon Bedrock을 통해 Claude 모델
 - **월말 비용 예측**: 일평균 비용 기반 월 전체 비용 추정 및 7일 단위 트렌드 분석 (증가/안정/감소)
 - **캐시 효율 분석**: 캐시 읽기/쓰기 토큰 추적, 캐시 히트율 게이지, 캐시 미사용 시 대비 절감액 계산 및 시각화, 캐시 히트율 추이 트렌드
 - **모델 효율성 분석**: Input/Output 비용 비율 비교, 비용 vs 레이턴시 버블 Scatter 차트, 호출당 비용(Cost Per Invocation) 추이 분석
-- **7개 Claude 모델 지원**: Opus 4.6, Opus 4.5, Sonnet 4.5, Haiku 4.5, Haiku 3.5 (Global/US Regional)
+- **8개 Claude 모델 지원**: Opus 4.6, Opus 4.5, Sonnet 4.6, Sonnet 4.5, Haiku 4.5, Haiku 3.5 (Global/US Regional)
 - **반응형 모바일 지원**: 접이식 사이드바를 포함한 반응형 레이아웃으로 모바일/태블릿 환경 지원
 - **다크/라이트 테마**: next-themes 기반 테마 전환 지원
 - **커스텀 시간 범위**: 1h, 6h, 24h, 7d, 30d 프리셋 및 Custom(날짜 직접 지정) 지원
@@ -57,7 +57,7 @@ EventBridge (1분 간격) ──► Lambda Aggregator (Python 3.12)
 ### 데이터 흐름
 
 1. **수집**: EventBridge가 1분마다 Lambda Aggregator를 호출합니다.
-2. **집계**: Lambda가 CloudWatch `AWS/Bedrock` 네임스페이스에서 7개 모델의 메트릭을 조회합니다.
+2. **집계**: Lambda가 CloudWatch `AWS/Bedrock` 네임스페이스에서 8개 모델의 메트릭을 조회합니다.
 3. **저장**: 비용을 계산하여 DynamoDB에 4단계 granularity로 기록합니다 (분/시/일/월누적).
 4. **조회**: Next.js API Routes가 DynamoDB 이력 또는 CloudWatch 실시간 데이터를 제공합니다.
 5. **시각화**: ECharts 기반 대시보드에서 60초 자동 갱신으로 표시합니다.
@@ -231,6 +231,7 @@ bedrock-claude-code-monitor/
 | `global.anthropic.claude-opus-4-6-v1` | Claude Opus 4.6 | Opus | $5.00 | $25.00 | $6.25 | $0.50 |
 | `global.anthropic.claude-opus-4-5-20251101-v1:0` | Claude Opus 4.5 | Opus | $5.00 | $25.00 | $6.25 | $0.50 |
 | `us.anthropic.claude-opus-4-5-20251101-v1:0` | Claude Opus 4.5 (US) | Opus | $5.50 | $27.50 | $6.875 | $0.55 |
+| `global.anthropic.claude-sonnet-4-6` | Claude Sonnet 4.6 | Sonnet | $3.00 | $15.00 | $3.75 | $0.30 |
 | `global.anthropic.claude-sonnet-4-5-20250929-v1:0` | Claude Sonnet 4.5 | Sonnet | $3.00 | $15.00 | $3.75 | $0.30 |
 | `global.anthropic.claude-haiku-4-5-20251001-v1:0` | Claude Haiku 4.5 | Haiku | $1.00 | $5.00 | $1.25 | $0.10 |
 | `us.anthropic.claude-haiku-4-5-20251001-v1:0` | Claude Haiku 4.5 (US) | Haiku | $1.10 | $5.50 | $1.375 | $0.11 |
