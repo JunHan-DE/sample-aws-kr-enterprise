@@ -4,7 +4,7 @@ Claude Code의 OpenTelemetry(OTel) 텔레메트리를 AWS 관측성 플랫폼으
 
 Claude Code는 메트릭을 OTel 표준 메트릭 프로토콜로, 이벤트를 OTel 로그/이벤트 프로토콜로 내보냅니다. 이 가이드는 개발자가 자신의 Claude Code 환경에서 텔레메트리를 활성화하고 AWS 인프라로 전송하는 방법을 설명합니다.
 
-> **참고**: 이 문서는 [Claude Code 공식 모니터링 문서](https://docs.anthropic.com/en/docs/claude-code/monitoring)를 기반으로 작성되었습니다.
+> **참고**: 이 문서는 [Claude Code 공식 모니터링 문서](https://code.claude.com/docs/en/monitoring-usage)를 기반으로 작성되었습니다.
 
 ---
 
