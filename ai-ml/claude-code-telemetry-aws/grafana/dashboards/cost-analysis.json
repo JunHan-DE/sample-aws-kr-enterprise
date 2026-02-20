@@ -1,0 +1,245 @@
+{
+  "uid": "claude-code-cost",
+  "title": "Claude Code - Cost Deep Analysis",
+  "description": "Event-level cost analysis -- per-request efficiency, speed mode comparison, model cost breakdown, user cost attribution. For aggregate cost totals and trends, see Real-Time Metrics.",
+  "tags": ["claude-code", "cost", "athena"],
+  "timezone": "utc",
+  "editable": true,
+  "graphTooltip": 1,
+  "schemaVersion": 39,
+  "version": 1,
+  "time": {"from": "now-7d", "to": "now"},
+  "links": [
+    {"title": "Overview", "url": "/d/claude-code-overview", "type": "link", "icon": "home", "tooltip": "Executive summary with Prometheus + Athena highlights"},
+    {"title": "Real-Time Metrics (Prometheus)", "url": "/d/claude-code-realtime", "type": "link", "icon": "lightning", "tooltip": "Live cost totals, rates, trends -- switch here for aggregate views"},
+    {"title": "Usage & Session Insights", "url": "/d/claude-code-usage", "type": "link"},
+    {"title": "Tool Analytics", "url": "/d/claude-code-tools", "type": "link"},
+    {"title": "API Performance", "url": "/d/claude-code-api", "type": "link"}
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "team", "label": "Team", "type": "query",
+        "datasource": {"type": "grafana-athena-datasource", "uid": "athena"},
+        "query": "SELECT DISTINCT team_id FROM claude_code_telemetry.events WHERE team_id IS NOT NULL AND \"timestamp\" BETWEEN from_iso8601_timestamp('${__from:date:iso}') AND from_iso8601_timestamp('${__to:date:iso}') ORDER BY team_id",
+        "includeAll": true, "allValue": "%", "current": {"text": "All", "value": "$__all"}, "refresh": 2
+      },
+      {
+        "name": "user", "label": "User", "type": "query",
+        "datasource": {"type": "grafana-athena-datasource", "uid": "athena"},
+        "query": "SELECT DISTINCT COALESCE(user_name, user_id) AS user_display FROM claude_code_telemetry.events WHERE user_id IS NOT NULL AND \"timestamp\" BETWEEN from_iso8601_timestamp('${__from:date:iso}') AND from_iso8601_timestamp('${__to:date:iso}') ORDER BY user_display",
+        "includeAll": true, "allValue": "%", "current": {"text": "All", "value": "$__all"}, "refresh": 2
+      },
+      {
+        "name": "model", "label": "Model", "type": "query",
+        "datasource": {"type": "prometheus", "uid": "amp"},
+        "query": "label_values(claude_code_cost_usage_USD_total, model)",
+        "includeAll": true, "allValue": ".*", "current": {"text": "All", "value": "$__all"}, "refresh": 2, "sort": 1
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 100, "type": "row", "title": "Cost KPIs",
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 0},
+      "collapsed": false, "panels": []
+    },
+    {
+      "id": 1, "title": "Avg Cost / Prompt", "description": "Average cost per user prompt interaction. Green < $0.05, Yellow $0.05-$0.15, Red > $0.15.", "type": "stat",
+      "gridPos": {"h": 5, "w": 6, "x": 0, "y": 1},
+      "datasource": {"type": "grafana-athena-datasource", "uid": "athena"},
+      "targets": [{"format": 1, "connectionArgs": {"region": "__default", "catalog": "__default", "database": "__default", "resultReuseEnabled": false, "resultReuseMaxAgeInMinutes": 60}, "refId": "A", "datasource": {"type": "grafana-athena-datasource", "uid": "athena"}, "rawSQL": "SELECT ROUND(total_cost / NULLIF(prompt_count, 0), 4) AS avg_cost_per_prompt FROM (SELECT SUM(CASE WHEN event_name = 'claude_code.api_request' THEN cost_usd ELSE 0 END) AS total_cost, COUNT(CASE WHEN event_name = 'claude_code.user_prompt' THEN 1 END) AS prompt_count FROM claude_code_telemetry.events WHERE event_name IN ('claude_code.api_request', 'claude_code.user_prompt') AND \"timestamp\" BETWEEN from_iso8601_timestamp('${__from:date:iso}') AND from_iso8601_timestamp('${__to:date:iso}') AND (team_id LIKE '${team}' OR '${team}' = '%') AND (COALESCE(user_name, user_id) LIKE '${user}' OR '${user}' = '%') AND (model LIKE '${model}' OR '${model}' = '.*' OR model IS NULL))"}],
+      "fieldConfig": {"defaults": {"displayName": "Avg Cost / Prompt", "unit": "currencyUSD", "color": {"mode": "fixed", "fixedColor": "#2C3E80"}}},
+      "options": {"colorMode": "background_solid", "graphMode": "area", "textMode": "value_and_name", "reduceOptions": {"calcs": ["lastNotNull"]}}
+    },
+    {
+      "id": 2, "title": "Avg Cost / API Call", "description": "Average cost per individual API request. Green < $0.01, Yellow $0.01-$0.05, Red > $0.05.", "type": "stat",
+      "gridPos": {"h": 5, "w": 6, "x": 6, "y": 1},
+      "datasource": {"type": "grafana-athena-datasource", "uid": "athena"},
+      "targets": [{"format": 1, "connectionArgs": {"region": "__default", "catalog": "__default", "database": "__default", "resultReuseEnabled": false, "resultReuseMaxAgeInMinutes": 60}, "refId": "A", "datasource": {"type": "grafana-athena-datasource", "uid": "athena"}, "rawSQL": "SELECT ROUND(AVG(cost_usd), 6) AS avg_cost_per_call FROM claude_code_telemetry.events WHERE event_name = 'claude_code.api_request' AND \"timestamp\" BETWEEN from_iso8601_timestamp('${__from:date:iso}') AND from_iso8601_timestamp('${__to:date:iso}') AND (team_id LIKE '${team}' OR '${team}' = '%') AND (COALESCE(user_name, user_id) LIKE '${user}' OR '${user}' = '%') AND (model LIKE '${model}' OR '${model}' = '.*')"}],
+      "fieldConfig": {"defaults": {"displayName": "Avg Cost / API Call", "unit": "currencyUSD", "color": {"mode": "fixed", "fixedColor": "#1A9C8E"}}},
+      "options": {"colorMode": "background_solid", "graphMode": "area", "textMode": "value_and_name", "reduceOptions": {"calcs": ["lastNotNull"]}}
+    },
+    {
+      "id": 3, "title": "Cost per 1K Output Tokens", "description": "Effective cost per 1,000 output tokens. Green < $0.02, Yellow $0.02-$0.08, Red > $0.08.", "type": "stat",
+      "gridPos": {"h": 5, "w": 6, "x": 12, "y": 1},
+      "datasource": {"type": "grafana-athena-datasource", "uid": "athena"},
+      "targets": [{"format": 1, "connectionArgs": {"region": "__default", "catalog": "__default", "database": "__default", "resultReuseEnabled": false, "resultReuseMaxAgeInMinutes": 60}, "refId": "A", "datasource": {"type": "grafana-athena-datasource", "uid": "athena"}, "rawSQL": "SELECT ROUND(SUM(cost_usd) * 1000.0 / NULLIF(SUM(output_tokens), 0), 4) AS cost_per_1k_output FROM claude_code_telemetry.events WHERE event_name = 'claude_code.api_request' AND \"timestamp\" BETWEEN from_iso8601_timestamp('${__from:date:iso}') AND from_iso8601_timestamp('${__to:date:iso}') AND (team_id LIKE '${team}' OR '${team}' = '%') AND (COALESCE(user_name, user_id) LIKE '${user}' OR '${user}' = '%') AND (model LIKE '${model}' OR '${model}' = '.*')"}],
+      "fieldConfig": {"defaults": {"displayName": "Cost / 1K Output Tokens", "unit": "currencyUSD", "color": {"mode": "fixed", "fixedColor": "#E25D33"}}},
+      "options": {"colorMode": "background_solid", "graphMode": "area", "textMode": "value_and_name", "reduceOptions": {"calcs": ["lastNotNull"]}}
+    },
+    {
+      "id": 50, "title": "Cache Efficiency", "description": "Cache hit ratio showing what percentage of input tokens were served from cache. Higher is better.", "type": "gauge",
+      "gridPos": {"h": 5, "w": 6, "x": 18, "y": 1},
+      "datasource": {"type": "grafana-athena-datasource", "uid": "athena"},
+      "targets": [{"format": 1, "connectionArgs": {"region": "__default", "catalog": "__default", "database": "__default", "resultReuseEnabled": false, "resultReuseMaxAgeInMinutes": 60}, "refId": "A", "datasource": {"type": "grafana-athena-datasource", "uid": "athena"}, "rawSQL": "SELECT ROUND(SUM(COALESCE(cache_read_tokens, 0)) * 100.0 / NULLIF(SUM(input_tokens + COALESCE(cache_read_tokens, 0)), 0), 1) AS cache_hit_pct FROM claude_code_telemetry.events WHERE event_name = 'claude_code.api_request' AND \"timestamp\" BETWEEN from_iso8601_timestamp('${__from:date:iso}') AND from_iso8601_timestamp('${__to:date:iso}') AND (team_id LIKE '${team}' OR '${team}' = '%') AND (COALESCE(user_name, user_id) LIKE '${user}' OR '${user}' = '%') AND (model LIKE '${model}' OR '${model}' = '.*')"}],
+      "fieldConfig": {"defaults": {"displayName": "Cache Hit Ratio", "unit": "percent", "min": 0, "max": 100, "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "yellow", "value": 30}, {"color": "green", "value": 60}]}}},
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "showThresholdLabels": false, "showThresholdMarkers": true}
+    },
+    {
+      "id": 101, "type": "row", "title": "Model Economics",
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 6},
+      "collapsed": false, "panels": []
+    },
+    {
+      "id": 4, "title": "Model Cost Comparison", "description": "Total cost from Prometheus (stable), call details from Athena. Joined by model.", "type": "table",
+      "gridPos": {"h": 10, "w": 24, "x": 0, "y": 7},
+      "datasource": {"type": "datasource", "uid": "-- Mixed --"},
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {"type": "grafana-athena-datasource", "uid": "athena"},
+          "rawSQL": "SELECT model, CAST(COUNT(*) AS INTEGER) AS api_calls, ROUND(CAST(SUM(input_tokens) AS DOUBLE) / NULLIF(CAST(SUM(output_tokens) AS DOUBLE), 0), 2) AS io_ratio, ROUND(AVG(cost_usd), 6) AS avg_cost_per_call FROM claude_code_telemetry.events WHERE event_name = 'claude_code.api_request' AND \"timestamp\" BETWEEN from_iso8601_timestamp('${__from:date:iso}') AND from_iso8601_timestamp('${__to:date:iso}') AND (team_id LIKE '${team}' OR '${team}' = '%') AND (COALESCE(user_name, user_id) LIKE '${user}' OR '${user}' = '%') AND (model LIKE '${model}' OR '${model}' = '.*') GROUP BY model",
+          "format": 1,
+          "connectionArgs": {"region": "__default", "catalog": "__default", "database": "__default", "resultReuseEnabled": false, "resultReuseMaxAgeInMinutes": 60}
+        },
+        {
+          "refId": "B",
+          "datasource": {"type": "prometheus", "uid": "amp"},
+          "expr": "sum by (model) (increase(claude_code_cost_usage_USD_total{model=~\"$model\"}[$__range]))",
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "joinByField",
+          "options": {
+            "byField": "model",
+            "mode": "outer"
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "renameByName": {
+              "Value": "total_cost"
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {"matcher": {"id": "byName", "options": "model"}, "properties": [{"id": "displayName", "value": "Model"}]},
+          {"matcher": {"id": "byName", "options": "api_calls"}, "properties": [{"id": "displayName", "value": "API Calls"}, {"id": "decimals", "value": 0}]},
+          {"matcher": {"id": "byName", "options": "total_cost"}, "properties": [{"id": "unit", "value": "currencyUSD"}, {"id": "custom.cellOptions", "value": {"type": "color-background", "mode": "gradient"}}, {"id": "thresholds", "value": {"mode": "absolute", "steps": [{"color": "transparent", "value": null}, {"color": "yellow", "value": 1}, {"color": "red", "value": 10}]}}, {"id": "displayName", "value": "Total Cost"}]},
+          {"matcher": {"id": "byName", "options": "io_ratio"}, "properties": [{"id": "displayName", "value": "I/O Ratio"}]},
+          {"matcher": {"id": "byName", "options": "avg_cost_per_call"}, "properties": [{"id": "unit", "value": "currencyUSD"}, {"id": "displayName", "value": "Avg Cost/Call"}]}
+        ]
+      },
+      "options": {"showHeader": true, "footer": {"enablePagination": true}, "filterable": true, "sortBy": [{"displayName": "Total Cost", "desc": true}]}
+    },
+    {
+      "id": 102, "type": "row", "title": "Cost Trends",
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 17},
+      "collapsed": false, "panels": []
+    },
+    {
+      "id": 6, "title": "Cost per Prompt Trend", "description": "Hourly trend of cost per prompt vs average cost per API call. Red threshold line at $0.15.", "type": "timeseries",
+      "gridPos": {"h": 9, "w": 12, "x": 0, "y": 18},
+      "datasource": {"type": "grafana-athena-datasource", "uid": "athena"},
+      "targets": [{"format": 1, "connectionArgs": {"region": "__default", "catalog": "__default", "database": "__default", "resultReuseEnabled": false, "resultReuseMaxAgeInMinutes": 60}, "refId": "A", "datasource": {"type": "grafana-athena-datasource", "uid": "athena"}, "rawSQL": "SELECT date_trunc('hour', \"timestamp\") AS time, ROUND(SUM(CASE WHEN event_name = 'claude_code.api_request' THEN cost_usd ELSE 0 END) / NULLIF(COUNT(CASE WHEN event_name = 'claude_code.user_prompt' THEN 1 END), 0), 4) AS cost_per_prompt, ROUND(AVG(CASE WHEN event_name = 'claude_code.api_request' THEN cost_usd END), 6) AS avg_cost_per_call FROM claude_code_telemetry.events WHERE event_name IN ('claude_code.api_request', 'claude_code.user_prompt') AND \"timestamp\" BETWEEN from_iso8601_timestamp('${__from:date:iso}') AND from_iso8601_timestamp('${__to:date:iso}') AND (team_id LIKE '${team}' OR '${team}' = '%') AND (COALESCE(user_name, user_id) LIKE '${user}' OR '${user}' = '%') AND (model LIKE '${model}' OR '${model}' = '.*' OR model IS NULL) GROUP BY 1 ORDER BY 1"}],
+      "fieldConfig": {
+        "defaults": {"unit": "currencyUSD", "custom": {"fillOpacity": 10, "lineWidth": 2, "gradientMode": "scheme", "axisLabel": "USD", "thresholdsStyle": {"mode": "line"}}, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "red", "value": 0.15}]}},
+        "overrides": [
+          {"matcher": {"id": "byName", "options": "cost_per_prompt"}, "properties": [{"id": "color", "value": {"fixedColor": "orange", "mode": "fixed"}}, {"id": "custom.lineWidth", "value": 3}]},
+          {"matcher": {"id": "byName", "options": "avg_cost_per_call"}, "properties": [{"id": "color", "value": {"fixedColor": "blue", "mode": "fixed"}}, {"id": "custom.lineStyle", "value": {"fill": "dash", "dash": [10, 10]}}]}
+        ]
+      },
+      "options": {"legend": {"displayMode": "table", "placement": "bottom"}, "tooltip": {"mode": "multi"}}
+    },
+    {
+      "id": 10, "title": "Cost by Model Trend", "description": "Per-model cost rate from Prometheus. Stacked area showing cost per minute by model.", "type": "timeseries",
+      "gridPos": {"h": 9, "w": 12, "x": 12, "y": 18},
+      "datasource": {"type": "prometheus", "uid": "amp"},
+      "targets": [{"refId": "A", "datasource": {"type": "prometheus", "uid": "amp"}, "expr": "sum by (model) (rate(claude_code_cost_usage_USD_total{model=~\"$model\"}[2m]) * 60)", "legendFormat": "{{model}}"}],
+      "fieldConfig": {
+        "defaults": {"unit": "currencyUSD", "color": {"mode": "palette-classic"}, "custom": {"fillOpacity": 0, "lineWidth": 2, "stacking": {"mode": "none"}, "axisLabel": "USD/min", "showPoints": "never", "spanNulls": true, "lineInterpolation": "smooth"}}
+      },
+      "options": {"legend": {"displayMode": "table", "placement": "bottom", "calcs": []}, "tooltip": {"mode": "multi", "sort": "desc"}}
+    },
+    {
+      "id": 11, "title": "Cost Distribution by Model", "description": "Total cost share by model from Prometheus. Shows which model consumes most budget.", "type": "piechart",
+      "gridPos": {"h": 9, "w": 12, "x": 0, "y": 27},
+      "datasource": {"type": "prometheus", "uid": "amp"},
+      "targets": [{"refId": "A", "datasource": {"type": "prometheus", "uid": "amp"}, "expr": "sum by (model) (increase(claude_code_cost_usage_USD_total{model=~\"$model\"}[$__range]))", "legendFormat": "{{model}}", "instant": true}],
+      "fieldConfig": {
+        "defaults": {"unit": "currencyUSD", "color": {"mode": "palette-classic"}}
+      },
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "legend": {"displayMode": "table", "placement": "right", "values": ["value", "percent"]}, "tooltip": {"mode": "single"}, "pieType": "donut"}
+    },
+    {
+      "id": 51, "title": "Cost by Organization", "description": "Cost attribution by organization for chargeback and budget allocation.", "type": "barchart",
+      "gridPos": {"h": 9, "w": 12, "x": 12, "y": 27},
+      "datasource": {"type": "grafana-athena-datasource", "uid": "athena"},
+      "targets": [{"format": 1, "connectionArgs": {"region": "__default", "catalog": "__default", "database": "__default", "resultReuseEnabled": false, "resultReuseMaxAgeInMinutes": 60}, "refId": "A", "datasource": {"type": "grafana-athena-datasource", "uid": "athena"}, "rawSQL": "SELECT COALESCE(organization_id, 'unknown') AS org, ROUND(SUM(cost_usd), 4) AS total_cost, COUNT(*) AS api_calls FROM claude_code_telemetry.events WHERE event_name = 'claude_code.api_request' AND \"timestamp\" BETWEEN from_iso8601_timestamp('${__from:date:iso}') AND from_iso8601_timestamp('${__to:date:iso}') AND (team_id LIKE '${team}' OR '${team}' = '%') AND (COALESCE(user_name, user_id) LIKE '${user}' OR '${user}' = '%') AND (model LIKE '${model}' OR '${model}' = '.*') GROUP BY organization_id ORDER BY total_cost DESC LIMIT 20"}],
+      "fieldConfig": {"defaults": {"color": {"mode": "fixed", "fixedColor": "#5470C6"}}, "overrides": [{"matcher": {"id": "byName", "options": "total_cost"}, "properties": [{"id": "unit", "value": "currencyUSD"}]}]},
+      "options": {"orientation": "horizontal", "showValue": "always", "barWidth": 0.7}
+    },
+    {
+      "id": 103, "type": "row", "title": "User Cost Attribution",
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 36},
+      "collapsed": false, "panels": []
+    },
+    {
+      "id": 7, "title": "User Cost Detail", "description": "Total cost from Prometheus (stable), user details from Athena. Joined by user_id.", "type": "table",
+      "gridPos": {"h": 10, "w": 24, "x": 0, "y": 37},
+      "datasource": {"type": "datasource", "uid": "-- Mixed --"},
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {"type": "grafana-athena-datasource", "uid": "athena"},
+          "rawSQL": "SELECT user_id, COALESCE(MAX(user_name), user_id) AS user_display, CAST(COUNT(DISTINCT session_id) AS INTEGER) AS sessions, CAST(COUNT(*) AS INTEGER) AS api_calls, SUM(input_tokens) AS input_tokens, SUM(output_tokens) AS output_tokens, SUM(COALESCE(cache_read_tokens, 0)) AS cache_read_tokens, ROUND(AVG(cost_usd), 6) AS avg_cost_per_call FROM claude_code_telemetry.events WHERE event_name = 'claude_code.api_request' AND \"timestamp\" BETWEEN from_iso8601_timestamp('${__from:date:iso}') AND from_iso8601_timestamp('${__to:date:iso}') AND (team_id LIKE '${team}' OR '${team}' = '%') AND (COALESCE(user_name, user_id) LIKE '${user}' OR '${user}' = '%') AND (model LIKE '${model}' OR '${model}' = '.*') GROUP BY user_id",
+          "format": 1,
+          "connectionArgs": {"region": "__default", "catalog": "__default", "database": "__default", "resultReuseEnabled": false, "resultReuseMaxAgeInMinutes": 60}
+        },
+        {
+          "refId": "B",
+          "datasource": {"type": "prometheus", "uid": "amp"},
+          "expr": "sum by (user_id) (increase(claude_code_cost_usage_USD_total{model=~\"$model\"}[$__range]))",
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "joinByField",
+          "options": {
+            "byField": "user_id",
+            "mode": "outer"
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "user_id": true,
+              "Time": true
+            },
+            "renameByName": {
+              "Value": "total_cost_usd"
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {"matcher": {"id": "byName", "options": "total_cost_usd"}, "properties": [{"id": "unit", "value": "currencyUSD"}, {"id": "custom.cellOptions", "value": {"type": "color-background", "mode": "gradient"}}, {"id": "thresholds", "value": {"mode": "absolute", "steps": [{"color": "transparent", "value": null}, {"color": "#FFF9C4", "value": 1}, {"color": "#FFCDD2", "value": 5}]}}, {"id": "displayName", "value": "Total Cost"}]},
+          {"matcher": {"id": "byName", "options": "avg_cost_per_call"}, "properties": [{"id": "unit", "value": "currencyUSD"}, {"id": "displayName", "value": "Avg Cost/Call"}]},
+          {"matcher": {"id": "byName", "options": "input_tokens"}, "properties": [{"id": "unit", "value": "short"}, {"id": "displayName", "value": "Input Tokens"}]},
+          {"matcher": {"id": "byName", "options": "output_tokens"}, "properties": [{"id": "unit", "value": "short"}, {"id": "displayName", "value": "Output Tokens"}]},
+          {"matcher": {"id": "byName", "options": "cache_read_tokens"}, "properties": [{"id": "unit", "value": "short"}, {"id": "displayName", "value": "Cache Read"}]},
+          {"matcher": {"id": "byName", "options": "user_display"}, "properties": [{"id": "displayName", "value": "User"}]},
+          {"matcher": {"id": "byName", "options": "sessions"}, "properties": [{"id": "displayName", "value": "Sessions"}, {"id": "decimals", "value": 0}]},
+          {"matcher": {"id": "byName", "options": "api_calls"}, "properties": [{"id": "displayName", "value": "API Calls"}, {"id": "decimals", "value": 0}]}
+        ]
+      },
+      "options": {"showHeader": true, "footer": {"enablePagination": true}, "filterable": true, "sortBy": [{"displayName": "Total Cost", "desc": true}]}
+    }
+  ]
+}

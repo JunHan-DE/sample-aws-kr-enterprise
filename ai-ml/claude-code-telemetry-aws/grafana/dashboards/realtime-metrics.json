@@ -1,0 +1,766 @@
+{
+  "uid": "claude-code-realtime",
+  "title": "Claude Code - Real-Time Metrics",
+  "description": "Real-time operational visibility via Prometheus (AMP) counters and rates. Complements Athena dashboards with live metric streams.",
+  "tags": ["claude-code", "realtime", "prometheus"],
+  "timezone": "utc",
+  "editable": true,
+  "graphTooltip": 1,
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "version": 1,
+  "time": {"from": "now-6h", "to": "now"},
+  "links": [
+    {"title": "Overview", "url": "/d/claude-code-overview", "type": "link", "icon": "home", "tooltip": "Executive summary with Prometheus + Athena highlights"},
+    {"title": "Cost Deep Analysis (Athena)", "url": "/d/claude-code-cost", "type": "link", "icon": "database", "tooltip": "Event-level cost efficiency, speed mode, per-call analysis"},
+    {"title": "Usage & Session Insights (Athena)", "url": "/d/claude-code-usage", "type": "link", "icon": "database", "tooltip": "Session drill-down, prompt analytics, event distribution"},
+    {"title": "Tool Analytics (Athena)", "url": "/d/claude-code-tools", "type": "link", "icon": "database", "tooltip": "Tool execution, success rates, performance metrics"},
+    {"title": "API Performance (Athena)", "url": "/d/claude-code-api", "type": "link", "icon": "database", "tooltip": "API latency percentiles, errors, speed modes"}
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "organization_id",
+        "label": "Organization",
+        "type": "query",
+        "datasource": {"type": "prometheus", "uid": "amp"},
+        "query": "label_values(claude_code_session_count_total, organization_id)",
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {"text": "All", "value": "$__all"},
+        "refresh": 2,
+        "sort": 1
+      },
+      {
+        "name": "user_id",
+        "label": "User",
+        "type": "query",
+        "datasource": {"type": "prometheus", "uid": "amp"},
+        "query": "label_values(claude_code_session_count_total{organization_id=~\"$organization_id\"}, user_id)",
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {"text": "All", "value": "$__all"},
+        "refresh": 2,
+        "sort": 1
+      },
+      {
+        "name": "model",
+        "label": "Model",
+        "type": "query",
+        "datasource": {"type": "prometheus", "uid": "amp"},
+        "query": "label_values(claude_code_cost_usage_USD_total, model)",
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {"text": "All", "value": "$__all"},
+        "refresh": 2,
+        "sort": 1
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 100,
+      "title": "Live Status",
+      "type": "row",
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 0},
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 1,
+      "title": "Active Sessions",
+      "description": "Total session count in selected time range",
+      "type": "stat",
+      "gridPos": {"h": 5, "w": 4, "x": 0, "y": 1},
+      "datasource": {"type": "prometheus", "uid": "amp"},
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {"type": "prometheus", "uid": "amp"},
+          "expr": "count(count_over_time(claude_code_session_count_total{organization_id=~\"$organization_id\", user_id=~\"$user_id\"}[$__range]))",
+          "legendFormat": "Sessions",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "displayName": "Sessions",
+          "color": {"mode": "fixed", "fixedColor": "#1A9C8E"},
+          "unit": "short",
+          "decimals": 0
+        }
+      },
+      "options": {
+        "colorMode": "background_solid",
+        "graphMode": "area",
+        "textMode": "value_and_name",
+        "reduceOptions": {"calcs": ["lastNotNull"]}
+      }
+    },
+    {
+      "id": 2,
+      "title": "Total Cost (USD)",
+      "description": "Cumulative cost across all models in selected time range",
+      "type": "stat",
+      "gridPos": {"h": 5, "w": 4, "x": 4, "y": 1},
+      "datasource": {"type": "prometheus", "uid": "amp"},
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {"type": "prometheus", "uid": "amp"},
+          "expr": "sum(increase(claude_code_cost_usage_USD_total{organization_id=~\"$organization_id\", user_id=~\"$user_id\", model=~\"$model\"}[$__range]))",
+          "legendFormat": "Cost",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "displayName": "Cost",
+          "unit": "currencyUSD",
+          "color": {"mode": "fixed", "fixedColor": "#2C3E80"}
+        }
+      },
+      "options": {
+        "colorMode": "background_solid",
+        "graphMode": "area",
+        "textMode": "value_and_name",
+        "reduceOptions": {"calcs": ["lastNotNull"]}
+      }
+    },
+    {
+      "id": 3,
+      "title": "Total Tokens",
+      "description": "Sum of all token types (input, output, cache read, cache creation)",
+      "type": "stat",
+      "gridPos": {"h": 5, "w": 4, "x": 8, "y": 1},
+      "datasource": {"type": "prometheus", "uid": "amp"},
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {"type": "prometheus", "uid": "amp"},
+          "expr": "sum(increase(claude_code_token_usage_tokens_total{organization_id=~\"$organization_id\", user_id=~\"$user_id\", model=~\"$model\"}[$__range]))",
+          "legendFormat": "Tokens",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "displayName": "Tokens",
+          "color": {"mode": "fixed", "fixedColor": "#E25D33"},
+          "unit": "short",
+          "decimals": 0
+        }
+      },
+      "options": {
+        "colorMode": "background_solid",
+        "graphMode": "area",
+        "textMode": "value_and_name",
+        "reduceOptions": {"calcs": ["lastNotNull"]}
+      }
+    },
+    {
+      "id": 4,
+      "title": "Active Time",
+      "description": "Total active coding time (user + CLI) in selected range",
+      "type": "stat",
+      "gridPos": {"h": 5, "w": 4, "x": 12, "y": 1},
+      "datasource": {"type": "prometheus", "uid": "amp"},
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {"type": "prometheus", "uid": "amp"},
+          "expr": "sum(increase(claude_code_active_time_seconds_total{organization_id=~\"$organization_id\", user_id=~\"$user_id\"}[$__range]))",
+          "legendFormat": "Active Time",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "displayName": "Active Time",
+          "color": {"mode": "fixed", "fixedColor": "#8F3BB8"},
+          "unit": "s",
+          "decimals": 0
+        }
+      },
+      "options": {
+        "colorMode": "background_solid",
+        "graphMode": "area",
+        "textMode": "value_and_name",
+        "reduceOptions": {"calcs": ["lastNotNull"]}
+      }
+    },
+    {
+      "id": 52,
+      "title": "Cache Hit Ratio",
+      "description": "Ratio of cached token reads to total input tokens. Higher is better - indicates effective prompt caching which reduces cost.",
+      "type": "gauge",
+      "gridPos": {"h": 5, "w": 4, "x": 16, "y": 1},
+      "datasource": {"type": "prometheus", "uid": "amp"},
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {"type": "prometheus", "uid": "amp"},
+          "expr": "sum(increase(claude_code_token_usage_tokens_total{type=\"cacheRead\", organization_id=~\"$organization_id\", user_id=~\"$user_id\", model=~\"$model\"}[$__range])) / (sum(increase(claude_code_token_usage_tokens_total{type=\"input\", organization_id=~\"$organization_id\", user_id=~\"$user_id\", model=~\"$model\"}[$__range])) + sum(increase(claude_code_token_usage_tokens_total{type=\"cacheRead\", organization_id=~\"$organization_id\", user_id=~\"$user_id\", model=~\"$model\"}[$__range]))) * 100",
+          "legendFormat": "Cache Hit %",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "displayName": "Cache Hit Ratio",
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "yellow", "value": 30},
+              {"color": "green", "value": 60}
+            ]
+          }
+        }
+      },
+      "options": {
+        "reduceOptions": {"calcs": ["lastNotNull"]},
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      }
+    },
+    {
+      "id": 53,
+      "title": "Edit Acceptance Rate",
+      "description": "Percentage of code edit suggestions that were accepted. Tracks AI code quality and relevance.",
+      "type": "gauge",
+      "gridPos": {"h": 5, "w": 4, "x": 20, "y": 1},
+      "datasource": {"type": "prometheus", "uid": "amp"},
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {"type": "prometheus", "uid": "amp"},
+          "expr": "sum(increase(claude_code_code_edit_tool_decision_total{decision=\"accept\", organization_id=~\"$organization_id\", user_id=~\"$user_id\"}[$__range])) / sum(increase(claude_code_code_edit_tool_decision_total{organization_id=~\"$organization_id\", user_id=~\"$user_id\"}[$__range])) * 100",
+          "legendFormat": "Acceptance %",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "displayName": "Edit Acceptance Rate",
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "yellow", "value": 60},
+              {"color": "green", "value": 80}
+            ]
+          }
+        }
+      },
+      "options": {
+        "reduceOptions": {"calcs": ["lastNotNull"]},
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      }
+    },
+
+    {
+      "id": 101,
+      "title": "Cost",
+      "type": "row",
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 6},
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 5,
+      "title": "Cost Distribution by Model",
+      "description": "Cost per model with sortable columns. Table panel replaces piechart for better readability when one model dominates spending.",
+      "type": "table",
+      "gridPos": {"h": 9, "w": 12, "x": 0, "y": 7},
+      "datasource": {"type": "prometheus", "uid": "amp"},
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {"type": "prometheus", "uid": "amp"},
+          "expr": "sum by (model) (increase(claude_code_cost_usage_USD_total{organization_id=~\"$organization_id\", user_id=~\"$user_id\", model=~\"$model\"}[$__range]))",
+          "legendFormat": "{{model}}",
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {"Time": true},
+            "renameByName": {"model": "Model", "Value": "Cost (USD)"},
+            "indexByName": {}
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "sort": [{"field": "Cost (USD)", "desc": true}]
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "filterable": true
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {"id": "byName", "options": "Model"},
+            "properties": [
+              {"id": "custom.width", "value": 250}
+            ]
+          },
+          {
+            "matcher": {"id": "byName", "options": "Cost (USD)"},
+            "properties": [
+              {"id": "unit", "value": "currencyUSD"},
+              {"id": "decimals", "value": 4},
+              {"id": "custom.cellOptions", "value": {"type": "color-background", "mode": "gradient"}},
+              {"id": "thresholds", "value": {"mode": "absolute", "steps": [{"color": "transparent", "value": null}, {"color": "#FFF9C4", "value": 1}, {"color": "#FFCDD2", "value": 50}]}}
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "footer": {"enablePagination": true, "reducer": ["sum"], "show": true, "fields": ["Cost (USD)"]},
+        "sortBy": [{"displayName": "Cost (USD)", "desc": true}],
+        "filterable": true
+      }
+    },
+    {
+      "id": 6,
+      "title": "Cost Rate",
+      "description": "Total cost rate over time (single aggregate line). Shows spending velocity.",
+      "type": "timeseries",
+      "gridPos": {"h": 9, "w": 12, "x": 12, "y": 7},
+      "datasource": {"type": "prometheus", "uid": "amp"},
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {"type": "prometheus", "uid": "amp"},
+          "expr": "sum(rate(claude_code_cost_usage_USD_total{organization_id=~\"$organization_id\", user_id=~\"$user_id\", model=~\"$model\"}[5m]))",
+          "legendFormat": "Total Cost Rate"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "color": {"fixedColor": "semi-dark-green", "mode": "fixed"},
+          "custom": {
+            "fillOpacity": 20,
+            "lineWidth": 2,
+            "gradientMode": "scheme",
+            "axisLabel": "USD/sec",
+            "lineInterpolation": "smooth",
+            "showPoints": "never",
+            "spanNulls": true
+          }
+        }
+      },
+      "options": {
+        "legend": {"displayMode": "table", "placement": "bottom", "calcs": ["mean", "max", "lastNotNull"]},
+        "tooltip": {"mode": "single"}
+      }
+    },
+
+    {
+      "id": 102,
+      "title": "Development",
+      "type": "row",
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 16},
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 7,
+      "title": "Lines of Code (Added vs Removed)",
+      "description": "Rate of lines added and removed over 5-minute windows",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 17},
+      "datasource": {"type": "prometheus", "uid": "amp"},
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {"type": "prometheus", "uid": "amp"},
+          "expr": "sum by (type) (rate(claude_code_lines_of_code_count_total{organization_id=~\"$organization_id\", user_id=~\"$user_id\"}[5m]))",
+          "legendFormat": "{{type}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "fillOpacity": 20,
+            "lineWidth": 2,
+            "pointSize": 5,
+            "gradientMode": "scheme",
+            "axisLabel": "lines/sec",
+            "showPoints": "never",
+            "spanNulls": true
+          }
+        },
+        "overrides": [
+          {"matcher": {"id": "byName", "options": "added"}, "properties": [{"id": "color", "value": {"fixedColor": "green", "mode": "fixed"}}]},
+          {"matcher": {"id": "byName", "options": "removed"}, "properties": [{"id": "color", "value": {"fixedColor": "red", "mode": "fixed"}}]}
+        ]
+      },
+      "options": {
+        "legend": {"displayMode": "table", "placement": "bottom", "calcs": ["mean", "max", "lastNotNull"]},
+        "tooltip": {"mode": "multi", "sort": "desc"}
+      }
+    },
+    {
+      "id": 8,
+      "title": "Token I/O Rate",
+      "description": "Input and output token rate stacked area. Shows real-time I/O balance.",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 17},
+      "datasource": {"type": "prometheus", "uid": "amp"},
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {"type": "prometheus", "uid": "amp"},
+          "expr": "sum by (type) (rate(claude_code_token_usage_tokens_total{organization_id=~\"$organization_id\", user_id=~\"$user_id\", model=~\"$model\", type=~\"input|output\"}[5m]))",
+          "legendFormat": "{{type}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "fillOpacity": 30,
+            "lineWidth": 2,
+            "stacking": {"mode": "normal"},
+            "gradientMode": "scheme",
+            "axisLabel": "tokens/sec",
+            "showPoints": "never",
+            "spanNulls": true
+          }
+        },
+        "overrides": [
+          {"matcher": {"id": "byName", "options": "input"}, "properties": [{"id": "color", "value": {"fixedColor": "blue", "mode": "fixed"}}]},
+          {"matcher": {"id": "byName", "options": "output"}, "properties": [{"id": "color", "value": {"fixedColor": "green", "mode": "fixed"}}]}
+        ]
+      },
+      "options": {
+        "legend": {"displayMode": "table", "placement": "bottom", "calcs": ["mean", "max", "lastNotNull"]},
+        "tooltip": {"mode": "multi", "sort": "desc"}
+      }
+    },
+    {
+      "id": 55,
+      "title": "Cache Token Usage",
+      "description": "Cache read and creation token rate. High cache reads reduce costs.",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 25},
+      "datasource": {"type": "prometheus", "uid": "amp"},
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {"type": "prometheus", "uid": "amp"},
+          "expr": "sum by (type) (rate(claude_code_token_usage_tokens_total{organization_id=~\"$organization_id\", user_id=~\"$user_id\", model=~\"$model\", type=~\"cacheRead|cacheCreation\"}[5m]))",
+          "legendFormat": "{{type}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {"fillOpacity": 15, "lineWidth": 2, "stacking": {"mode": "normal"}, "gradientMode": "scheme", "axisLabel": "tokens/sec", "showPoints": "never", "spanNulls": true},
+          "unit": "short"
+        },
+        "overrides": [
+          {"matcher": {"id": "byName", "options": "cacheRead"}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "super-light-green"}}, {"id": "displayName", "value": "Cache Read"}]},
+          {"matcher": {"id": "byName", "options": "cacheCreation"}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "orange"}}, {"id": "displayName", "value": "Cache Creation"}]}
+        ]
+      },
+      "options": {
+        "legend": {"displayMode": "table", "placement": "bottom", "calcs": ["mean", "max", "lastNotNull"]},
+        "tooltip": {"mode": "multi", "sort": "desc"}
+      }
+    },
+
+    {
+      "id": 103,
+      "title": "Tool & Code Editing Analytics",
+      "type": "row",
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 33},
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 9,
+      "title": "Code Edit Decisions (Accept vs Reject)",
+      "description": "Distribution of code edit tool decisions by accept/reject. Piechart appropriate here (non-model categorical: accept vs reject).",
+      "type": "piechart",
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 34},
+      "datasource": {"type": "prometheus", "uid": "amp"},
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {"type": "prometheus", "uid": "amp"},
+          "expr": "sum by (decision) (increase(claude_code_code_edit_tool_decision_total{organization_id=~\"$organization_id\", user_id=~\"$user_id\"}[$__range]))",
+          "legendFormat": "{{decision}}",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {"matcher": {"id": "byName", "options": "accept"}, "properties": [{"id": "color", "value": {"fixedColor": "green", "mode": "fixed"}}]},
+          {"matcher": {"id": "byName", "options": "reject"}, "properties": [{"id": "color", "value": {"fixedColor": "red", "mode": "fixed"}}]}
+        ]
+      },
+      "options": {
+        "legend": {"displayMode": "table", "placement": "right", "values": ["value", "percent"]},
+        "pieType": "donut",
+        "tooltip": {"mode": "multi"},
+        "reduceOptions": {"calcs": ["lastNotNull"]}
+      }
+    },
+    {
+      "id": 10,
+      "title": "Edit Decisions by Language",
+      "description": "Top programming languages by code edit tool decision count. Piechart appropriate (non-model categorical data).",
+      "type": "piechart",
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 34},
+      "datasource": {"type": "prometheus", "uid": "amp"},
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {"type": "prometheus", "uid": "amp"},
+          "expr": "topk(8, sum by (language) (increase(claude_code_code_edit_tool_decision_total{organization_id=~\"$organization_id\", user_id=~\"$user_id\"}[$__range])))",
+          "legendFormat": "{{language}}",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {"mode": "palette-classic"}
+        }
+      },
+      "options": {
+        "legend": {"displayMode": "table", "placement": "right", "values": ["value", "percent"]},
+        "pieType": "donut",
+        "tooltip": {"mode": "multi"},
+        "displayLabels": ["percent"],
+        "reduceOptions": {"calcs": ["lastNotNull"]}
+      }
+    },
+    {
+      "id": 11,
+      "title": "Active Time (User vs CLI)",
+      "description": "Active coding time split between interactive (user) and headless (CLI) modes. Piechart appropriate (non-model categorical: user vs cli).",
+      "type": "piechart",
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 34},
+      "datasource": {"type": "prometheus", "uid": "amp"},
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {"type": "prometheus", "uid": "amp"},
+          "expr": "sum by (type) (increase(claude_code_active_time_seconds_total{organization_id=~\"$organization_id\", user_id=~\"$user_id\"}[$__range]))",
+          "legendFormat": "{{type}}",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": [
+          {"matcher": {"id": "byName", "options": "user"}, "properties": [{"id": "color", "value": {"fixedColor": "blue", "mode": "fixed"}}]},
+          {"matcher": {"id": "byName", "options": "cli"}, "properties": [{"id": "color", "value": {"fixedColor": "orange", "mode": "fixed"}}]}
+        ]
+      },
+      "options": {
+        "legend": {"displayMode": "table", "placement": "right", "values": ["value", "percent"]},
+        "pieType": "donut",
+        "tooltip": {"mode": "multi"},
+        "reduceOptions": {"calcs": ["lastNotNull"]}
+      }
+    },
+
+    {
+      "id": 104,
+      "title": "Rates & Details",
+      "type": "row",
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 42},
+      "collapsed": true,
+      "panels": [
+        {
+          "id": 12,
+          "title": "Session Rate",
+          "description": "Rate of new sessions starting over 5-minute windows",
+          "type": "timeseries",
+          "gridPos": {"h": 7, "w": 8, "x": 0, "y": 43},
+          "datasource": {"type": "prometheus", "uid": "amp"},
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {"type": "prometheus", "uid": "amp"},
+              "expr": "sum(rate(claude_code_session_count_total{organization_id=~\"$organization_id\", user_id=~\"$user_id\"}[5m]))",
+              "legendFormat": "Sessions/sec"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "ops",
+              "custom": {
+                "fillOpacity": 15,
+                "lineWidth": 2,
+                "pointSize": 5,
+                "gradientMode": "scheme",
+                "axisLabel": "sessions/sec"
+              },
+              "color": {"fixedColor": "blue", "mode": "fixed"}
+            }
+          },
+          "options": {
+            "legend": {"displayMode": "table", "placement": "bottom", "calcs": ["mean", "max", "lastNotNull"]},
+            "tooltip": {"mode": "multi"}
+          }
+        },
+        {
+          "id": 13,
+          "title": "Token Distribution by Model",
+          "description": "Token usage per model with sortable columns. Table replaces piechart for model comparison.",
+          "type": "table",
+          "gridPos": {"h": 7, "w": 8, "x": 8, "y": 43},
+          "datasource": {"type": "prometheus", "uid": "amp"},
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {"type": "prometheus", "uid": "amp"},
+              "expr": "sum by (model) (increase(claude_code_token_usage_tokens_total{organization_id=~\"$organization_id\", user_id=~\"$user_id\", model=~\"$model\"}[$__range]))",
+              "legendFormat": "{{model}}",
+              "instant": true,
+              "format": "table"
+            }
+          ],
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {"Time": true},
+                "renameByName": {"model": "Model", "Value": "Tokens"},
+                "indexByName": {}
+              }
+            },
+            {
+              "id": "sortBy",
+              "options": {
+                "sort": [{"field": "Tokens", "desc": true}]
+              }
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "align": "auto",
+                "filterable": true
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {"id": "byName", "options": "Model"},
+                "properties": [
+                  {"id": "custom.width", "value": 200}
+                ]
+              },
+              {
+                "matcher": {"id": "byName", "options": "Tokens"},
+                "properties": [
+                  {"id": "unit", "value": "short"},
+                  {"id": "decimals", "value": 0},
+                  {"id": "custom.cellOptions", "value": {"type": "color-background", "mode": "gradient"}},
+                  {"id": "thresholds", "value": {"mode": "absolute", "steps": [{"color": "transparent", "value": null}, {"color": "#E3F2FD", "value": 100000}, {"color": "#BBDEFB", "value": 1000000}]}}
+                ]
+              }
+            ]
+          },
+          "options": {
+            "showHeader": true,
+            "footer": {"enablePagination": true, "reducer": ["sum"], "show": true, "fields": ["Tokens"]},
+            "sortBy": [{"displayName": "Tokens", "desc": true}],
+            "filterable": true
+          }
+        },
+        {
+          "id": 14,
+          "title": "Edit Tool Decision Trend",
+          "description": "Accept/reject decisions over time to track code quality trends",
+          "type": "timeseries",
+          "gridPos": {"h": 7, "w": 8, "x": 16, "y": 43},
+          "datasource": {"type": "prometheus", "uid": "amp"},
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {"type": "prometheus", "uid": "amp"},
+              "expr": "sum by (decision) (rate(claude_code_code_edit_tool_decision_total{organization_id=~\"$organization_id\", user_id=~\"$user_id\"}[5m]))",
+              "legendFormat": "{{decision}}"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "custom": {
+                "fillOpacity": 15,
+                "lineWidth": 2,
+                "pointSize": 5,
+                "gradientMode": "scheme",
+                "axisLabel": "edits/sec"
+              }
+            },
+            "overrides": [
+              {"matcher": {"id": "byName", "options": "accept"}, "properties": [{"id": "color", "value": {"fixedColor": "green", "mode": "fixed"}}]},
+              {"matcher": {"id": "byName", "options": "reject"}, "properties": [{"id": "color", "value": {"fixedColor": "red", "mode": "fixed"}}]}
+            ]
+          },
+          "options": {
+            "legend": {"displayMode": "table", "placement": "bottom", "calcs": ["mean", "max", "lastNotNull"]},
+            "tooltip": {"mode": "multi", "sort": "desc"}
+          }
+        },
+        {
+          "id": 54,
+          "title": "Top Languages",
+          "description": "Most actively edited programming languages ranked by total code edit decisions",
+          "type": "bargauge",
+          "gridPos": {"h": 6, "w": 24, "x": 0, "y": 50},
+          "datasource": {"type": "prometheus", "uid": "amp"},
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {"type": "prometheus", "uid": "amp"},
+              "expr": "topk(10, sum by (language) (increase(claude_code_code_edit_tool_decision_total{organization_id=~\"$organization_id\", user_id=~\"$user_id\"}[$__range])))",
+              "legendFormat": "{{language}}",
+              "instant": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "color": {"mode": "continuous-BlYlRd"}
+            }
+          },
+          "options": {
+            "orientation": "horizontal",
+            "displayMode": "gradient",
+            "reduceOptions": {"calcs": ["lastNotNull"]}
+          }
+        }
+      ]
+    }
+  ]
+}
