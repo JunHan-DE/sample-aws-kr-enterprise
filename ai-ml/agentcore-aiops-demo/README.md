@@ -379,4 +379,4 @@ AWS_DEFAULT_REGION=ap-northeast-2 npx aws-cdk destroy AiopsSampleAppStack --forc
 
 ## 라이선스
 
-MIT License
+MIT-0 License
