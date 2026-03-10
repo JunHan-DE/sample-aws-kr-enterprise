@@ -1,0 +1,12 @@
+node_modules/
+cdk.out/
+build/
+.DS_Store
+TEMP_FILES_REGISTRY.log
+*.pyc
+__pycache__/
+*.js.map
+package-lock.json
+.env
+cdk.context.json
+.kiro/

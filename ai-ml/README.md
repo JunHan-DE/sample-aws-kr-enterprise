@@ -5,6 +5,7 @@ AWS의 AI/ML 서비스를 활용한 데모 및 샘플 코드 모음입니다. Am
 ## 대표 서비스
 
 - [Amazon Bedrock](https://aws.amazon.com/ko/bedrock/) - 파운데이션 모델을 활용한 생성형 AI 애플리케이션 및 에이전트 구축 플랫폼
+- [Amazon Bedrock AgentCore](https://aws.amazon.com/ko/bedrock/agentcore/) - AI 에이전트를 프로덕션 환경에서 실행·관리하는 런타임 플랫폼
 - [Amazon SageMaker](https://aws.amazon.com/ko/sagemaker/) - 데이터, 분석, AI를 위한 통합 머신러닝 플랫폼
 - [Amazon Nova](https://aws.amazon.com/ko/nova/) - 빠르고 비용 효율적인 파운데이션 모델 포트폴리오
 - [Amazon Rekognition](https://aws.amazon.com/ko/rekognition/) - ML 기반 이미지 인식 및 비디오 분석 서비스
@@ -17,6 +18,7 @@ AWS의 AI/ML 서비스를 활용한 데모 및 샘플 코드 모음입니다. Am
 | [bedrock-detailed-monitoring-dashboard](./bedrock-detailed-monitoring-dashboard/) | Amazon Bedrock Claude 모델 사용량과 비용을 실시간 모니터링하는 웹 대시보드. CloudWatch 메트릭 기반 7개 모델 추적, 4단계 집계(분/시/일/월), 캐시 절감 분석, 월말 비용 예측 | Amazon Bedrock, CloudFront, ECS Fargate, DynamoDB, Lambda |
 | [claude-code-telemetry-aws](./claude-code-telemetry-aws/) | Claude Code OpenTelemetry 텔레메트리 수집·분석 관측성 플랫폼. 이중 파이프라인(Prometheus 메트릭 + Athena 이벤트)으로 6개 Grafana 대시보드(80패널) 제공. 비용·사용량·성능 통합 모니터링 | Amazon Managed Prometheus, Amazon Managed Grafana, Athena, ECS Fargate, Kinesis Data Firehose |
 | [x86-to-graviton-with-aws-transform-custom](./x86-to-graviton-with-aws-transform-custom/) | AWS Transform Custom을 활용한 x86 Java 애플리케이션의 Graviton(ARM64) 전환 가이드. Spring Boot 3.2.1 샘플앱 대상, atx CLI v1.1.1 사용, 8단계 변환 프로세스 100% 완료 | AWS Transform Custom, Amazon EC2 (Graviton) |
+| [agentcore-aiops-demo](./agentcore-aiops-demo/) | LLM 기반 멀티 에이전트 AIOps 플랫폼. CloudWatch 알람 발생 시 Reflexion 패턴(Collector→Writer→Reviewer) RCA Graph가 자동으로 근본 원인을 분석하고 한국어 리포트를 생성. 사용자 승인 후 Executor Agent가 자동 복구 수행. WebSocket 채팅으로 자연어 인프라 조사 지원 | Bedrock AgentCore, Strands Agents, Bedrock Knowledge Base, OpenSearch Serverless, DynamoDB, Lambda, CloudFront |
 
 ## 참고 리소스
 
