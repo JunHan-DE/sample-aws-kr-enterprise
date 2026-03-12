@@ -37,12 +37,12 @@ def logs_agent(query: str) -> str:
     """
     try:
         agent = Agent(
-            system_prompt="""You are a Logs Agent. Investigate using ALL available tools:
-1. query_cloudwatch_logs: Search for errors in application logs
-2. lookup_cloudtrail_events: ALWAYS search for recent API changes - try both by resource_name AND by event_name (e.g. ModifySecurityGroupRules, StopInstances, RevokeSecurityGroupEgress)
-3. get_ec2_console_output: Check instance system logs for boot errors
-4. get_config_history: Check AWS Config for resource configuration changes
-Return concise summary (max 800 tokens) including WHO changed WHAT and WHEN.""",
+            system_prompt="""You are a Logs Agent. Investigate using the MOST RELEVANT tools only (max 3 tool calls):
+1. lookup_cloudtrail_events: Search for recent API changes by resource_name or event_name
+2. query_cloudwatch_logs: Search for errors in application logs (only if log group is known)
+3. get_config_history: Check AWS Config for resource configuration changes (only if specific resource is suspected)
+4. get_ec2_console_output: Check instance system logs (only if instance boot issue suspected)
+Return concise summary (max 500 tokens) including WHO changed WHAT and WHEN.""",
             tools=[query_cloudwatch_logs, lookup_cloudtrail_events, get_ec2_console_output, get_config_history],
             callback_handler=None,
         )
@@ -61,7 +61,7 @@ def metrics_agent(query: str) -> str:
     """
     try:
         agent = Agent(
-            system_prompt="You are a Metrics Agent. Analyze metric data to identify anomalies, threshold violations, and correlations. Return concise summary (max 600 tokens).",
+            system_prompt="You are a Metrics Agent. Make max 3 tool calls. Focus on the specific alarming metric first, then check directly related metrics only. Return concise summary (max 400 tokens).",
             tools=[get_metric_data, describe_alarms, list_metrics],
             callback_handler=None,
         )
@@ -80,7 +80,7 @@ def infrastructure_agent(query: str) -> str:
     """
     try:
         agent = Agent(
-            system_prompt="You are an Infrastructure Agent. Check resource states across AWS services and identify unhealthy, stopped, or misconfigured resources. Return concise summary (max 1000 tokens).",
+            system_prompt="You are an Infrastructure Agent. Make max 3 tool calls. Check ONLY the resources directly related to the query — do not scan all services. Return concise summary (max 500 tokens).",
             tools=[describe_instances, describe_target_health, check_security_groups,
                    describe_db_instances, describe_auto_scaling_groups, describe_vpcs,
                    describe_ecs_services, describe_lambda_functions, describe_nat_gateways],

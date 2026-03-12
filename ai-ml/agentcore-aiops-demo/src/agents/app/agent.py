@@ -38,6 +38,11 @@ Use your tools:
 - infrastructure_agent: Current state of affected resources (is it actually broken?)
 - knowledge_agent: Runbooks for this type of incident
 
+EFFICIENCY — CRITICAL:
+- Make MAXIMUM 6 tool calls total. Prioritize: (1) metrics_agent for the alarm metric, (2) infrastructure_agent for resource state, (3) logs_agent for changes, (4) knowledge_agent only if needed
+- Each tool call must have a SPECIFIC question. Do NOT ask broad questions like "investigate everything"
+- STOP as soon as you have enough evidence to identify the root cause. Do not investigate further
+
 IMPORTANT:
 - Clearly distinguish between "currently broken" vs "working correctly"
 - For each resource you investigate, state whether it is HEALTHY or UNHEALTHY with evidence
