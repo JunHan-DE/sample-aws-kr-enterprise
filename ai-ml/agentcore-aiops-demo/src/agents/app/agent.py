@@ -147,7 +147,7 @@ def build_rca_graph():
     builder.add_edge("reviewer", "collector", condition=needs_revision)
 
     builder.set_max_node_executions(MAX_ITERATIONS * 3)
-    builder.set_execution_timeout(300)
+    builder.set_execution_timeout(600)
     builder.reset_on_revisit(True)
     builder.set_entry_point("collector")
     return builder.build()
@@ -157,6 +157,10 @@ def run_rca(prompt: str) -> str:
     """Execute the RCA graph and extract the final report."""
     graph = build_rca_graph()
     result = graph(prompt)
+
+    # Graph failed (e.g. timeout) — raise so _rca_background handles it as FAILED
+    if hasattr(result, 'status') and 'FAILED' in str(result.status).upper():
+        raise RuntimeError(f"RCA Graph failed: {result.status}")
 
     # Extract the writer's output (JSON report) from the last execution
     writer_result = result.results.get("writer")
