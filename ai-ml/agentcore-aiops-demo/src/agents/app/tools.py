@@ -160,13 +160,13 @@ def query_cloudwatch_logs(log_group: str, query_string: str, hours_back: int = 1
 
 
 @tool
-def lookup_cloudtrail_events(resource_name: str = "", event_name: str = "", hours_back: int = 24) -> str:
+def lookup_cloudtrail_events(resource_name: str = "", event_name: str = "", hours_back: int = 6) -> str:
     """Lookup CloudTrail events to find who made changes.
 
     Args:
         resource_name: Resource name to filter
         event_name: API event name to filter (e.g. StopInstances)
-        hours_back: How many hours back to search
+        hours_back: How many hours back to search (default 6, max 24)
     """
     from datetime import datetime, timezone, timedelta
     try:
