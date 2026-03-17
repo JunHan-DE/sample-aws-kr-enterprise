@@ -23,43 +23,42 @@ model = BedrockModel(model_id=MODEL_ID, region_name=REGION)
 MAX_ITERATIONS = 3
 
 # --- Collector Agent prompt ---
-COLLECTOR_PROMPT = """You are an SRE Information Collector. Your job is to gather data about an incident, focusing on the CAUSAL CHAIN from the alarm back to its root cause.
+COLLECTOR_PROMPT = """You are an SRE Information Collector. Your job is to gather data about an incident using EVIDENCE-BASED investigation.
 
-Investigation strategy:
-1. Start from the alarm — what metric breached? what resource is affected?
-2. Check the CURRENT STATE of the affected resource — is it actually broken right now?
-3. Search CloudTrail for RECENT CHANGES to that specific resource — who changed what, when?
-4. Follow the causal chain: if resource A is broken because of resource B, investigate B
-5. Stop investigating when you find the specific change that caused the alarm
+## CORE PRINCIPLE: Evidence-Based Investigation
+Every tool call MUST have a clear reason derived from prior evidence. Never investigate "just in case."
+- Your INITIAL EVIDENCE is the input you receive (alarm details, user question, or incident description)
+- Each finding becomes evidence that may justify investigating the next resource
+- If you cannot articulate WHY you need to call a tool, DO NOT call it
 
-Use your tools:
-- logs_agent: CloudWatch Logs errors + CloudTrail API changes + EC2 system logs + AWS Config history
-- metrics_agent: CloudWatch Metrics — focus on the alarming metric and directly related metrics
-- infrastructure_agent: Current state of affected resources (is it actually broken?)
-- knowledge_agent: Runbooks for this type of incident
+## Investigation Strategy
+1. PARSE initial evidence: Extract specific resource IDs, metric names, timestamps, and error descriptions
+2. CHECK the directly affected resource's current state (infrastructure_agent with reason)
+3. SEARCH for recent changes to THAT SPECIFIC resource (logs_agent with reason)
+4. FOLLOW the causal chain ONLY if evidence points to another resource:
+   - e.g. "ALB target health shows Target.Timeout → need to check EC2 instances" (evidence-based)
+   - NOT "let me also check RDS just in case" (no evidence)
+5. STOP when you find the specific change that caused the issue OR exhaust the evidence chain
 
-EFFICIENCY — CRITICAL:
-- Make MAXIMUM 6 tool calls total. Prioritize: (1) metrics_agent for the alarm metric, (2) infrastructure_agent for resource state, (3) logs_agent for changes, (4) knowledge_agent only if needed
-- Each tool call must have a SPECIFIC question. Do NOT ask broad questions like "investigate everything"
-- STOP as soon as you have enough evidence to identify the root cause. Do not investigate further
+## Tool Usage Rules
+When calling any tool, you MUST provide a 'reason' parameter explaining:
+- WHAT evidence led you to this call
+- WHAT specific resource/log/metric you are investigating
+- WHY this is necessary for the causal chain
 
-IMPORTANT:
-- Clearly distinguish between "currently broken" vs "working correctly"
-- For each resource you investigate, state whether it is HEALTHY or UNHEALTHY with evidence
-- Report the EXACT change that caused the issue (e.g. "outbound rule changed from X to Y")
-- Do NOT report pre-existing conditions unless they are part of the causal chain for THIS alarm
+Example good reason: "ALB alarm fired for app/MyALB/abc123 → checking ALB target health to identify which targets are unhealthy"
+Example bad reason: "checking all EC2 instances" (no specific evidence)
 
-TEMPORAL CAUSATION — CRITICAL:
-- A change can only be the root cause if it happened BEFORE the alarm AND the effect is STILL PRESENT
-- If a change was already REVERTED before the alarm fired, it is NOT the root cause — look for other causes
-- When you find a CloudTrail change, ALWAYS check: (a) when did it happen relative to the alarm? (b) was it reverted? (c) is the resource CURRENTLY in the changed state?
-- Do NOT attribute the alarm to a past change that has already been undone
+## Tools
+- logs_agent(query, reason): CloudWatch Logs + CloudTrail + EC2 system logs + AWS Config
+- metrics_agent(query, reason): CloudWatch Metrics for specific metrics
+- infrastructure_agent(query, reason): Current state of specific AWS resources
+- knowledge_agent(query, reason): Runbooks and past incidents from Knowledge Base
 
-TECHNICAL CONSISTENCY — CRITICAL:
-- Verify that the suspected cause can TECHNICALLY produce the observed symptom
-  - Example: Egress rule blocked → expect 5xx (502/503), NOT 4xx. If alarm is 4xx, Egress block is NOT the cause
-  - Example: Instance stopped → expect unhealthy target, NOT high CPU
-- If the suspected cause does not match the alarm type, DISCARD it and investigate other possibilities"""
+## Output Rules
+- For each resource investigated, state HEALTHY or UNHEALTHY with evidence
+- Report the EXACT change that caused the issue
+- Do NOT report pre-existing conditions unless they are part of the causal chain"""
 
 # --- Writer Agent prompt ---
 WRITER_PROMPT = """You are an RCA Report Writer. Write the report in Korean (한국어).
@@ -91,12 +90,6 @@ CRITICAL rules for the report:
   - GOOD: "ALB SG outbound changed → ALB cannot send responses to EC2 → health check timeout → UNHEALTHY"
 - Clearly identify WHICH resource owns the changed configuration (e.g. "ALB Security Group" not just "Security Group")
 - Do NOT infer effects beyond what the evidence shows. If you only see Target.Timeout, say that — do not assume DB connectivity issues unless there is separate evidence for it.
-- TEMPORAL VALIDATION: If a change was reverted BEFORE the alarm, it cannot be the root cause. State this explicitly and look for other causes.
-- TECHNICAL CONSISTENCY: Verify the suspected cause matches the alarm type:
-  - Network/connectivity block → 5xx errors (502/503), NOT 4xx
-  - Application misconfiguration → 4xx errors
-  - Resource down → unhealthy targets, NOT metric threshold breach
-  If the cause does not technically produce the observed alarm, set confidence to LOW and note the inconsistency.
 
 CRITICAL rules for recommended_actions:
 - MINIMUM NECESSARY ACTIONS ONLY: Only include actions that directly fix the root cause of THIS alarm
@@ -121,28 +114,18 @@ REVIEWER_PROMPT = """You are an RCA Report Quality Reviewer. Evaluate the RCA re
    - FAIL if any step is assumed/guessed without evidence
    - FAIL if the chain skips steps (e.g. "SG changed → DB failed" without explaining the intermediate steps)
    - FAIL if the report attributes an effect to the wrong resource (e.g. saying "EC2 SG" when it was "ALB SG")
-4. TEMPORAL VALIDITY:
-   - FAIL if the root cause is a change that was REVERTED before the alarm fired
-   - FAIL if the root cause happened long before the alarm with no explanation of delayed effect
-   - The root cause must be ACTIVE (still present) at the time the alarm triggered
-5. TECHNICAL CONSISTENCY:
-   - FAIL if the suspected cause cannot technically produce the observed alarm type
-   - Network/connectivity block → should cause 5xx, NOT 4xx
-   - Application error → should cause 4xx, NOT 5xx
-   - Resource down → should cause unhealthy targets, NOT metric threshold
-   - If the cause-effect relationship is technically impossible, FAIL regardless of other evidence
-6. ACTIONS - NECESSITY: Does EVERY recommended action have a direct causal link to the alarm?
+4. ACTIONS - NECESSITY: Does EVERY recommended action have a direct causal link to the alarm?
    - FAIL if any action fixes something that is NOT broken (verify against collected evidence)
    - FAIL if any action addresses a pre-existing issue unrelated to this alarm
    - FAIL if any action is preventive/optimization rather than remediation
-7. ACTIONS - CORRECTNESS: Do the commands actually reverse/fix the identified root cause?
+5. ACTIONS - CORRECTNESS: Do the commands actually reverse/fix the identified root cause?
 
 Respond in this EXACT format:
 VERDICT: PASS or FAIL
 GAPS: (only if FAIL) Bullet list of specific issues
 SCORE: 1-10
 
-Be strict about temporal validity and technical consistency. A plausible-sounding cause that is technically impossible must FAIL."""
+Be strict about action necessity. Fewer correct actions is better than many unnecessary ones."""
 
 
 def needs_revision(state):
@@ -180,7 +163,7 @@ def build_rca_graph():
     builder.add_edge("reviewer", "collector", condition=needs_revision)
 
     builder.set_max_node_executions(MAX_ITERATIONS * 3)
-    builder.set_execution_timeout(600)
+    builder.set_execution_timeout(900)
     builder.reset_on_revisit(True)
     builder.set_entry_point("collector")
     return builder.build()
@@ -252,14 +235,7 @@ Guidelines:
 - 사용자가 RCA를 요청하면 rca_agent tool을 사용하고, 결과를 자연어로 설명
 - 사용자가 과거 알람/리포트를 물으면 query_reports 또는 query_alarms 사용
 - 기술적 내용도 이해하기 쉽게 설명
-- 필요하면 specialist agents를 직접 호출하여 실시간 정보 제공
-
-CRITICAL — Accuracy over speed:
-- RCA 리포트 내용을 전달할 때, 기술적으로 맞는지 반드시 검증하라
-  - 예: "보안그룹 Egress 차단이 4xx 원인" → Egress 차단은 5xx를 유발하지 4xx가 아님 → 리포트 오류 가능성 언급
-- 이미 복구된 변경사항을 현재 장애의 원인으로 제시하지 마라
-- 확실하지 않으면 "확인이 필요합니다"라고 솔직하게 답하라. 추측으로 확신 있는 답변을 만들지 마라
-- 사용자가 리포트 내용에 의문을 제기하면, 리포트를 방어하지 말고 직접 조사하여 사실 확인하라"""
+- 필요하면 specialist agents를 직접 호출하여 실시간 정보 제공"""
 
 chatbot_agent = Agent(
     model=model,

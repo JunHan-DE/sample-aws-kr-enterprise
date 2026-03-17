@@ -29,83 +29,118 @@ bedrock_agent = boto3.client("bedrock-agent-runtime", region_name=REGION)
 
 # --- Logs Agent ---
 @tool
-def logs_agent(query: str) -> str:
+def logs_agent(query: str, reason: str = "") -> str:
     """Analyze CloudWatch Logs, EC2 system logs, CloudTrail, and AWS Config for incident investigation.
 
     Args:
         query: Description of the incident to investigate via logs
+        reason: Evidence-based justification for this investigation (e.g. "ALB alarm on app/MyALB/abc → checking CloudTrail for recent SG changes")
     """
     try:
         agent = Agent(
-            system_prompt="""You are a Logs Agent. Investigate using the MOST RELEVANT tools only (max 3 tool calls):
-1. lookup_cloudtrail_events: Search for recent API changes by resource_name or event_name
-2. query_cloudwatch_logs: Search for errors in application logs (only if log group is known)
-3. get_config_history: Check AWS Config for resource configuration changes (only if specific resource is suspected)
-4. get_ec2_console_output: Check instance system logs (only if instance boot issue suspected)
-Return concise summary (max 500 tokens) including WHO changed WHAT and WHEN.""",
+            system_prompt="""You are a Logs Agent. Investigate ONLY the specific resources and events described in the query.
+
+RULES:
+- Use ONLY the tools needed for the specific investigation requested
+- Do NOT search broadly — target specific resource IDs, log groups, or event names from the query
+- If the query mentions a specific resource, search CloudTrail for changes to THAT resource only
+- Return concise summary (max 800 tokens) including WHO changed WHAT and WHEN
+
+Tools:
+- query_cloudwatch_logs: Search specific log groups for errors
+- lookup_cloudtrail_events: Search for API changes to specific resources
+- get_ec2_console_output: Check specific instance system logs
+- get_config_history: Check specific resource configuration changes""",
             tools=[query_cloudwatch_logs, lookup_cloudtrail_events, get_ec2_console_output, get_config_history],
             callback_handler=None,
         )
-        return str(agent(f"Investigate: {query}"))
+        prompt = f"Investigate: {query}"
+        if reason:
+            prompt = f"[Reason: {reason}]\n{prompt}"
+        return str(agent(prompt))
     except Exception as e:
         return f"Logs agent error: {e}"
 
 
 # --- Metrics Agent ---
 @tool
-def metrics_agent(query: str) -> str:
+def metrics_agent(query: str, reason: str = "") -> str:
     """Analyze CloudWatch Metrics for anomalies and trends.
 
     Args:
         query: Description of metrics to analyze
+        reason: Evidence-based justification for this investigation (e.g. "ALB 4XX alarm → checking HTTPCode_Target_4XX_Count metric trend")
     """
     try:
         agent = Agent(
-            system_prompt="You are a Metrics Agent. Make max 3 tool calls. Focus on the specific alarming metric first, then check directly related metrics only. Return concise summary (max 400 tokens).",
+            system_prompt="""You are a Metrics Agent. Analyze ONLY the specific metrics described in the query.
+
+RULES:
+- Query only the metrics directly relevant to the investigation
+- Do NOT explore unrelated namespaces or metrics
+- Focus on the specific time window and resource mentioned in the query
+- Return concise summary (max 600 tokens) with actual metric values and timestamps""",
             tools=[get_metric_data, describe_alarms, list_metrics],
             callback_handler=None,
         )
-        return str(agent(f"Analyze metrics: {query}"))
+        prompt = f"Analyze metrics: {query}"
+        if reason:
+            prompt = f"[Reason: {reason}]\n{prompt}"
+        return str(agent(prompt))
     except Exception as e:
         return f"Metrics agent error: {e}"
 
 
 # --- Infrastructure Agent ---
 @tool
-def infrastructure_agent(query: str) -> str:
+def infrastructure_agent(query: str, reason: str = "") -> str:
     """Investigate AWS resource states across EC2, ALB, RDS, SG, ASG, ECS, Lambda, VPC, Route53.
 
     Args:
         query: Description of infrastructure to investigate
+        reason: Evidence-based justification for this investigation (e.g. "ALB target unhealthy → checking EC2 instance i-abc123 state")
     """
     try:
         agent = Agent(
-            system_prompt="You are an Infrastructure Agent. Make max 3 tool calls. Check ONLY the resources directly related to the query — do not scan all services. Return concise summary (max 500 tokens).",
+            system_prompt="""You are an Infrastructure Agent. Check ONLY the specific resources mentioned in the query.
+
+RULES:
+- Investigate only the resource IDs or types explicitly requested
+- Do NOT scan all resources of a type — check only the ones linked to the investigation
+- For each resource checked, report HEALTHY or UNHEALTHY with specific evidence
+- Return concise summary (max 1000 tokens)""",
             tools=[describe_instances, describe_target_health, check_security_groups,
                    describe_db_instances, describe_auto_scaling_groups, describe_vpcs,
                    describe_ecs_services, describe_lambda_functions, describe_nat_gateways],
             callback_handler=None,
         )
-        return str(agent(f"Investigate infrastructure: {query}"))
+        prompt = f"Investigate infrastructure: {query}"
+        if reason:
+            prompt = f"[Reason: {reason}]\n{prompt}"
+        return str(agent(prompt))
     except Exception as e:
         return f"Infrastructure agent error: {e}"
 
 
 # --- Knowledge Agent ---
 @tool
-def knowledge_agent(query: str) -> str:
+def knowledge_agent(query: str, reason: str = "") -> str:
     """Search operational history and runbooks from Bedrock Knowledge Base.
 
     Args:
         query: Description of the incident to search for relevant knowledge
+        reason: Evidence-based justification for this search (e.g. "ALB 4XX spike with healthy targets → searching for similar past incidents")
     """
     try:
         agent = Agent(
-            system_prompt="You are a Knowledge Agent. Search for relevant runbooks, past incidents, and system specs. Return concise summary (max 600 tokens).",
+            system_prompt="You are a Knowledge Agent. Search for relevant runbooks, past incidents, and system specs matching the specific issue described. Return concise summary (max 600 tokens).",
             tools=[retrieve_from_kb],
             callback_handler=None,
         )
-        return str(agent(f"Search knowledge base: {query}"))
+        prompt = f"Search knowledge base: {query}"
+        if reason:
+            prompt = f"[Reason: {reason}]\n{prompt}"
+        return str(agent(prompt))
     except Exception as e:
         return f"Knowledge agent error: {e}"
 
@@ -160,13 +195,13 @@ def query_cloudwatch_logs(log_group: str, query_string: str, hours_back: int = 1
 
 
 @tool
-def lookup_cloudtrail_events(resource_name: str = "", event_name: str = "", hours_back: int = 6) -> str:
+def lookup_cloudtrail_events(resource_name: str = "", event_name: str = "", hours_back: int = 24) -> str:
     """Lookup CloudTrail events to find who made changes.
 
     Args:
         resource_name: Resource name to filter
         event_name: API event name to filter (e.g. StopInstances)
-        hours_back: How many hours back to search (default 6, max 24)
+        hours_back: How many hours back to search
     """
     from datetime import datetime, timezone, timedelta
     try:
