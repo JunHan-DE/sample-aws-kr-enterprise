@@ -43,7 +43,7 @@ def logs_agent(query: str, reason: str = "") -> str:
 RULES:
 - Use ONLY the tools needed for the specific investigation requested
 - Do NOT search broadly — target specific resource IDs, log groups, or event names from the query
-- If the query mentions a specific resource, search CloudTrail for changes to THAT resource only
+- PARALLEL: If multiple independent searches are needed (e.g. CloudWatch Logs AND CloudTrail for the same resource), call them in the SAME turn
 - Make MAXIMUM 3 tool calls total
 - Return concise summary (max 800 tokens) including WHO changed WHAT and WHEN
 
@@ -79,7 +79,7 @@ def metrics_agent(query: str, reason: str = "") -> str:
 RULES:
 - Query only the metrics directly relevant to the investigation
 - Do NOT explore unrelated namespaces or metrics
-- Focus on the specific time window and resource mentioned in the query
+- PARALLEL: If multiple independent metrics are needed (e.g. 4XX count AND target response time), call get_metric_data for each in the SAME turn
 - Make MAXIMUM 3 tool calls total
 - Return concise summary (max 600 tokens) with actual metric values and timestamps""",
             tools=[get_metric_data, describe_alarms, list_metrics],
@@ -109,6 +109,7 @@ def infrastructure_agent(query: str, reason: str = "") -> str:
 RULES:
 - Investigate only the resource IDs or types explicitly requested
 - Do NOT scan all resources of a type — check only the ones linked to the investigation
+- PARALLEL: If multiple independent resources need checking (e.g. ALB target health AND ASG status), call them in the SAME turn
 - For each resource checked, report HEALTHY or UNHEALTHY with specific evidence
 - Make MAXIMUM 3 tool calls total
 - Return concise summary (max 1000 tokens)""",
