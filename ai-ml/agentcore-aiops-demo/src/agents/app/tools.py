@@ -53,7 +53,7 @@ Tools:
 - get_ec2_console_output: Check specific instance system logs
 - get_config_history: Check specific resource configuration changes""",
             tools=[query_cloudwatch_logs, lookup_cloudtrail_events, get_ec2_console_output, get_config_history],
-            callback_handler=None, max_turns=3,
+            callback_handler=None,
         )
         prompt = f"Investigate: {query}"
         if reason:
@@ -83,7 +83,7 @@ RULES:
 - Make MAXIMUM 3 tool calls total
 - Return concise summary (max 600 tokens) with actual metric values and timestamps""",
             tools=[get_metric_data, describe_alarms, list_metrics],
-            callback_handler=None, max_turns=3,
+            callback_handler=None,
         )
         prompt = f"Analyze metrics: {query}"
         if reason:
@@ -116,7 +116,7 @@ RULES:
             tools=[describe_instances, describe_target_health, check_security_groups,
                    describe_db_instances, describe_auto_scaling_groups, describe_vpcs,
                    describe_ecs_services, describe_lambda_functions, describe_nat_gateways],
-            callback_handler=None, max_turns=3,
+            callback_handler=None,
         )
         prompt = f"Investigate infrastructure: {query}"
         if reason:
