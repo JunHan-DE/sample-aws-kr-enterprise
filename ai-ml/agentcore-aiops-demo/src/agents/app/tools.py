@@ -44,6 +44,7 @@ RULES:
 - Use ONLY the tools needed for the specific investigation requested
 - Do NOT search broadly — target specific resource IDs, log groups, or event names from the query
 - If the query mentions a specific resource, search CloudTrail for changes to THAT resource only
+- Make MAXIMUM 3 tool calls total
 - Return concise summary (max 800 tokens) including WHO changed WHAT and WHEN
 
 Tools:
@@ -52,7 +53,7 @@ Tools:
 - get_ec2_console_output: Check specific instance system logs
 - get_config_history: Check specific resource configuration changes""",
             tools=[query_cloudwatch_logs, lookup_cloudtrail_events, get_ec2_console_output, get_config_history],
-            callback_handler=None,
+            callback_handler=None, max_turns=3,
         )
         prompt = f"Investigate: {query}"
         if reason:
@@ -79,9 +80,10 @@ RULES:
 - Query only the metrics directly relevant to the investigation
 - Do NOT explore unrelated namespaces or metrics
 - Focus on the specific time window and resource mentioned in the query
+- Make MAXIMUM 3 tool calls total
 - Return concise summary (max 600 tokens) with actual metric values and timestamps""",
             tools=[get_metric_data, describe_alarms, list_metrics],
-            callback_handler=None,
+            callback_handler=None, max_turns=3,
         )
         prompt = f"Analyze metrics: {query}"
         if reason:
@@ -108,11 +110,12 @@ RULES:
 - Investigate only the resource IDs or types explicitly requested
 - Do NOT scan all resources of a type — check only the ones linked to the investigation
 - For each resource checked, report HEALTHY or UNHEALTHY with specific evidence
+- Make MAXIMUM 3 tool calls total
 - Return concise summary (max 1000 tokens)""",
             tools=[describe_instances, describe_target_health, check_security_groups,
                    describe_db_instances, describe_auto_scaling_groups, describe_vpcs,
                    describe_ecs_services, describe_lambda_functions, describe_nat_gateways],
-            callback_handler=None,
+            callback_handler=None, max_turns=3,
         )
         prompt = f"Investigate infrastructure: {query}"
         if reason:

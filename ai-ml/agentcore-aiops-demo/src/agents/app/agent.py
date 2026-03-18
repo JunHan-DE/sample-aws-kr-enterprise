@@ -163,7 +163,7 @@ def build_rca_graph():
     builder.add_edge("reviewer", "collector", condition=needs_revision)
 
     builder.set_max_node_executions(MAX_ITERATIONS * 3)
-    builder.set_execution_timeout(900)
+    builder.set_execution_timeout(1800)
     builder.reset_on_revisit(True)
     builder.set_entry_point("collector")
     return builder.build()
