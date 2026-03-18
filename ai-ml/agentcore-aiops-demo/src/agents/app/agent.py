@@ -172,14 +172,13 @@ def run_rca(prompt: str) -> str:
     graph = build_rca_graph()
     result = graph(prompt)
 
-    # Graph failed (e.g. timeout) — raise so _rca_background handles it as FAILED
-    if hasattr(result, 'status') and 'FAILED' in str(result.status).upper():
-        raise RuntimeError(f"RCA Graph failed: {result.status}")
-
-    # Extract the writer's output (JSON report) from the last execution
+    # Extract the writer's output even if graph status is FAILED (e.g. max iterations reached)
+    # The writer may have produced a usable report before the reviewer rejected it
     writer_result = result.results.get("writer")
     if writer_result:
         text = str(writer_result.result)
+    elif hasattr(result, 'status') and 'FAILED' in str(result.status).upper():
+        raise RuntimeError(f"RCA Graph failed: {result.status}")
     else:
         text = str(result)
 
