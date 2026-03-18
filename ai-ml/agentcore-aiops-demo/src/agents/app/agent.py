@@ -111,6 +111,10 @@ CRITICAL ANALYSIS RULES:
 - Trace the causal chain ONE STEP AT A TIME: A caused B, B caused C. Each step must have evidence.
 - Clearly identify WHICH resource owns the changed configuration (e.g. "ALB Security Group" not just "Security Group")
 - Do NOT infer effects beyond what the evidence shows.
+- CAUSATION VERIFICATION: When you find a configuration change, verify it ACTUALLY explains THIS alarm's symptom:
+  - Does this change produce the specific error type in the alarm? (e.g. SG outbound block → 5XX/timeout, NOT 4XX)
+  - Did the alarm metric anomaly start AFTER the change? Check timestamps. If the anomaly started BEFORE the change, the change is NOT the cause.
+  - If a change exists but does NOT match the alarm symptom, it is a coincidence — do NOT use it as root cause.
 - If the Collector found NO infrastructure issue (all healthy, no config changes), the root cause should state that this is likely client-side traffic (invalid URLs, bots, scanners) and NOT an infrastructure problem. Set confidence to HIGH in this case — "no infrastructure issue" IS a valid and confident conclusion.
 
 CRITICAL rules for recommended_actions:
@@ -134,6 +138,8 @@ REVIEWER_PROMPT = """You are an RCA Report Quality Reviewer. Evaluate the RCA re
    - FAIL if the chain skips steps (e.g. "SG changed → DB failed" without explaining the intermediate steps)
    - FAIL if the report attributes an effect to the wrong resource (e.g. saying "EC2 SG" when it was "ALB SG")
    - FAIL if the report blames infrastructure (capacity, workers, NAT) when there is NO evidence of infrastructure failure
+   - FAIL if a configuration change is cited as root cause but it produces a DIFFERENT error type than the alarm (e.g. SG outbound block causes 5XX/timeout, NOT 4XX — citing it as 4XX cause is wrong)
+   - FAIL if the alarm metric anomaly started BEFORE the cited configuration change — the change cannot cause something that already happened
 4. ACTIONS - NECESSITY: Does EVERY recommended action have a direct causal link to the alarm?
    - FAIL if any action fixes something that is NOT broken (verify against collected evidence)
    - FAIL if any action addresses a pre-existing issue unrelated to this alarm
