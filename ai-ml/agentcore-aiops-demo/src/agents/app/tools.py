@@ -203,8 +203,8 @@ def lookup_cloudtrail_events(resource_name: str = "", event_name: str = "", hour
     """Lookup CloudTrail events to find who made changes.
 
     Args:
-        resource_name: Resource name to filter
-        event_name: API event name to filter (e.g. StopInstances)
+        resource_name: Resource name or ID to filter (e.g. sg-abc123, i-abc123)
+        event_name: API event name to filter (e.g. RevokeSecurityGroupEgress, StopInstances)
         hours_back: How many hours back to search
     """
     from datetime import datetime, timezone, timedelta
@@ -216,10 +216,16 @@ def lookup_cloudtrail_events(resource_name: str = "", event_name: str = "", hour
         elif event_name:
             kwargs["LookupAttributes"] = [{"AttributeKey": "EventName", "AttributeValue": event_name}]
         resp = cloudtrail.lookup_events(**kwargs)
-        return json.dumps([{"time": str(e.get("EventTime")), "event": e.get("EventName"),
-                            "user": e.get("Username"), "source": e.get("EventSource"),
-                            "resources": [r.get("ResourceName") for r in e.get("Resources", [])]}
-                           for e in resp.get("Events", [])], default=str)
+        events = [{"time": str(e.get("EventTime")), "event": e.get("EventName"),
+                    "user": e.get("Username"), "source": e.get("EventSource"),
+                    "resources": [r.get("ResourceName") for r in e.get("Resources", [])]}
+                   for e in resp.get("Events", [])]
+
+        # If searching by resource and no results, hint to try by event name
+        if resource_name and not events:
+            events.append({"HINT": f"No events found for resource '{resource_name}'. Try searching by event_name instead (e.g. 'RevokeSecurityGroupEgress', 'AuthorizeSecurityGroupEgress', 'ModifySecurityGroupRules')."})
+
+        return json.dumps(events, default=str)
     except Exception as e:
         return f"Error: {e}"
 
@@ -340,15 +346,23 @@ def describe_target_health(target_group_arn: str = "") -> str:
 
 @tool
 def check_security_groups(sg_id: str = "") -> str:
-    """Check Security Group rules."""
+    """Check Security Group rules. IMPORTANT: Empty egress (outbound) rules means ALL outbound traffic is blocked — this is almost always a misconfiguration."""
     try:
         kwargs = {"Filters": [{"Name": "group-id", "Values": [sg_id]}]} if sg_id else {}
         resp = ec2.describe_security_group_rules(**kwargs)
-        return json.dumps([{"rule_id": r.get("SecurityGroupRuleId", ""), "sg_id": r["GroupId"], "direction": "inbound" if not r["IsEgress"] else "outbound",
+        rules = [{"rule_id": r.get("SecurityGroupRuleId", ""), "sg_id": r["GroupId"], "direction": "inbound" if not r["IsEgress"] else "outbound",
                             "protocol": r.get("IpProtocol", ""), "from_port": r.get("FromPort", ""),
                             "to_port": r.get("ToPort", ""),
                             "source": r.get("CidrIpv4", r.get("ReferencedGroupInfo", {}).get("GroupId", ""))}
-                           for r in resp["SecurityGroupRules"][:50]], default=str)
+                           for r in resp["SecurityGroupRules"][:50]]
+
+        # Flag missing egress rules — this is critical
+        if sg_id:
+            has_egress = any(r["direction"] == "outbound" for r in rules)
+            if not has_egress:
+                rules.append({"WARNING": f"Security Group {sg_id} has NO EGRESS (outbound) rules — ALL outbound traffic is BLOCKED. This is likely a misconfiguration causing connectivity failures."})
+
+        return json.dumps(rules, default=str)
     except Exception as e:
         return f"Error: {e}"
 

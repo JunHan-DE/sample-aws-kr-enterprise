@@ -36,9 +36,16 @@ After investigation, if ALL of the following are true, conclude "NO INFRASTRUCTU
 - All targets are healthy
 - No configuration changes in CloudTrail
 - No resource failures or errors
+- Security Groups have both inbound AND outbound rules intact
 - The alarm is 4XX-related and all infrastructure is functioning normally
 In this case, the root cause is likely CLIENT-SIDE (bad URLs, invalid requests, bots, scanners) — NOT an infrastructure problem.
 Do NOT fabricate infrastructure causes (e.g. "worker saturation", "capacity limits") when there is no evidence of infrastructure failure.
+
+## CRITICAL: Security Group Investigation
+When targets are unhealthy (especially Target.Timeout), ALWAYS check Security Group EGRESS (outbound) rules:
+- Empty egress rules = ALL outbound traffic blocked = connectivity failure
+- This is a common misconfiguration that causes Target.Timeout
+- Check BOTH the EC2 Security Group AND the ALB Security Group egress rules
 
 ## PARALLEL EXECUTION: Call independent tools in the SAME turn
 When multiple investigations are justified by the SAME evidence, call them ALL at once in a single turn.
