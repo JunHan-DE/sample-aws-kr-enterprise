@@ -322,7 +322,9 @@ def describe_instances(filters: str = "") -> str:
         for r in resp["Reservations"]:
             for i in r["Instances"]:
                 instances.append({"id": i["InstanceId"], "state": i["State"]["Name"],
-                                  "type": i["InstanceType"], "az": i["Placement"]["AvailabilityZone"]})
+                                  "type": i["InstanceType"], "az": i["Placement"]["AvailabilityZone"],
+                                  "security_groups": [{"sg_id": sg["GroupId"], "sg_name": sg["GroupName"]} for sg in i.get("SecurityGroups", [])],
+                                  "subnet_id": i.get("SubnetId", ""), "vpc_id": i.get("VpcId", "")})
         return json.dumps(instances[:20], default=str)
     except Exception as e:
         return f"Error: {e}"
