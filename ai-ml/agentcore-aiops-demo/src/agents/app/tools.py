@@ -346,7 +346,7 @@ def describe_target_health(target_group_arn: str = "") -> str:
 
 @tool
 def check_security_groups(sg_id: str = "") -> str:
-    """Check Security Group rules. Returns both inbound and outbound rules. WARNING messages indicate misconfigurations."""
+    """Check Security Group rules and which resources use this SG. Returns inbound/outbound rules plus attached resources. WARNING messages indicate misconfigurations."""
     try:
         kwargs = {"Filters": [{"Name": "group-id", "Values": [sg_id]}]} if sg_id else {}
         resp = ec2.describe_security_group_rules(**kwargs)
@@ -356,14 +356,30 @@ def check_security_groups(sg_id: str = "") -> str:
                             "source": r.get("CidrIpv4", r.get("ReferencedGroupInfo", {}).get("GroupId", ""))}
                            for r in resp["SecurityGroupRules"][:50]]
 
-        # Flag missing rules — these are critical misconfigurations
+        # Identify which resources use this SG
         if sg_id:
-            has_egress = any(r["direction"] == "outbound" for r in rules)
-            has_ingress = any(r["direction"] == "inbound" for r in rules)
+            sg_desc = ec2.describe_security_groups(GroupIds=[sg_id])
+            for sg in sg_desc.get("SecurityGroups", []):
+                sg_name = sg.get("GroupName", "")
+                sg_desc_text = sg.get("Description", "")
+                rules.insert(0, {"sg_id": sg_id, "sg_name": sg_name, "description": sg_desc_text})
+
+            # Find attached ENIs to determine what resource owns this SG
+            enis = ec2.describe_network_interfaces(Filters=[{"Name": "group-id", "Values": [sg_id]}])
+            attached = []
+            for eni in enis.get("NetworkInterfaces", [])[:10]:
+                owner = eni.get("Description", "")
+                attached.append({"eni_id": eni["NetworkInterfaceId"], "owner_description": owner,
+                                 "attachment": eni.get("Attachment", {}).get("InstanceId", "N/A")})
+            if attached:
+                rules.insert(1, {"attached_resources": attached})
+
+            has_egress = any(r.get("direction") == "outbound" for r in rules)
+            has_ingress = any(r.get("direction") == "inbound" for r in rules)
             if not has_egress:
-                rules.append({"WARNING": f"Security Group {sg_id} has NO EGRESS (outbound) rules — ALL outbound traffic is BLOCKED."})
+                rules.append({"WARNING": f"Security Group {sg_id} has NO EGRESS (outbound) rules — ALL outbound traffic from resources using this SG is BLOCKED."})
             if not has_ingress:
-                rules.append({"WARNING": f"Security Group {sg_id} has NO INGRESS (inbound) rules — ALL inbound traffic is BLOCKED."})
+                rules.append({"WARNING": f"Security Group {sg_id} has NO INGRESS (inbound) rules — ALL inbound traffic to resources using this SG is BLOCKED."})
 
         return json.dumps(rules, default=str)
     except Exception as e:
