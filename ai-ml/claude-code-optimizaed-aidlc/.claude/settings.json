@@ -1,0 +1,35 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh -c 'if [ -f aidlc-docs/aidlc-state.md ]; then PHASE=$(grep -m1 \"Current Phase\" aidlc-docs/aidlc-state.md | sed \"s/.*: *//\" || echo \"UNKNOWN\"); STAGE=$(grep -m1 \"Current Stage\" aidlc-docs/aidlc-state.md | sed \"s/.*: *//\" || echo \"UNKNOWN\"); PENDING=$(find aidlc-docs -name \"*-questions.md\" -exec grep -l \"\\[Answer\\]:[ ]*$\" {} + 2>/dev/null | tr \"\\n\" \", \"); echo \"{\\\"hookSpecificOutput\\\":{\\\"hookEventName\\\":\\\"SessionStart\\\",\\\"additionalContext\\\":\\\"AIDLC project active. Phase: ${PHASE}. Stage: ${STAGE}. ${PENDING:+Pending question files: ${PENDING%, }. }Read aidlc-docs/aidlc-state.md for full context.\\\"}}\"; else echo \"{\\\"hookSpecificOutput\\\":{\\\"hookEventName\\\":\\\"SessionStart\\\",\\\"additionalContext\\\":\\\"No AIDLC project found. Use /aidlc-detect to initialize.\\\"}}\"; fi'",
+            "statusMessage": "Checking AIDLC project state..."
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "matcher": "aidlc-.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh -c 'mkdir -p aidlc-docs && echo \"$(date -u +%Y-%m-%dT%H:%M:%SZ) | Agent completed | Session: ${CLAUDE_SESSION_ID:-unknown}\" >> aidlc-docs/audit.md'",
+            "async": true
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "allow": [
+      "Read(*)",
+      "Glob(*)",
+      "Grep(*)"
+    ]
+  }
+}
