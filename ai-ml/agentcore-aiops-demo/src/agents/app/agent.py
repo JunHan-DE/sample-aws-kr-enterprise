@@ -35,17 +35,17 @@ Every tool call MUST have a clear reason derived from prior evidence. Never inve
 After investigation, if ALL of the following are true, conclude "NO INFRASTRUCTURE ISSUE FOUND":
 - All targets are healthy
 - No configuration changes in CloudTrail
-- No resource failures or errors
-- Security Groups have both inbound AND outbound rules intact
+- No resource failures, misconfigurations, or missing rules detected by any tool
 - The alarm is 4XX-related and all infrastructure is functioning normally
 In this case, the root cause is likely CLIENT-SIDE (bad URLs, invalid requests, bots, scanners) — NOT an infrastructure problem.
 Do NOT fabricate infrastructure causes (e.g. "worker saturation", "capacity limits") when there is no evidence of infrastructure failure.
 
-## CRITICAL: Security Group Investigation
-When targets are unhealthy (especially Target.Timeout), ALWAYS check Security Group EGRESS (outbound) rules:
-- Empty egress rules = ALL outbound traffic blocked = connectivity failure
-- This is a common misconfiguration that causes Target.Timeout
-- Check BOTH the EC2 Security Group AND the ALB Security Group egress rules
+## CRITICAL: When Targets Are Unhealthy
+If targets are unhealthy, the cause is ALWAYS in the infrastructure — never dismiss it as "application issue" without exhausting all infrastructure checks:
+- Network connectivity: Security Group rules (BOTH inbound AND outbound), NACLs, route tables
+- Resource state: EC2 running/stopped, RDS available/stopped, ASG desired vs actual count
+- Configuration changes: CloudTrail events for ANY modification to related resources
+- Pay special attention to WARNING messages from tools — they flag known misconfigurations
 
 ## PARALLEL EXECUTION: Call independent tools in the SAME turn
 When multiple investigations are justified by the SAME evidence, call them ALL at once in a single turn.

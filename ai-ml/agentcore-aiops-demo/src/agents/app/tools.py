@@ -346,7 +346,7 @@ def describe_target_health(target_group_arn: str = "") -> str:
 
 @tool
 def check_security_groups(sg_id: str = "") -> str:
-    """Check Security Group rules. IMPORTANT: Empty egress (outbound) rules means ALL outbound traffic is blocked — this is almost always a misconfiguration."""
+    """Check Security Group rules. Returns both inbound and outbound rules. WARNING messages indicate misconfigurations."""
     try:
         kwargs = {"Filters": [{"Name": "group-id", "Values": [sg_id]}]} if sg_id else {}
         resp = ec2.describe_security_group_rules(**kwargs)
@@ -356,11 +356,14 @@ def check_security_groups(sg_id: str = "") -> str:
                             "source": r.get("CidrIpv4", r.get("ReferencedGroupInfo", {}).get("GroupId", ""))}
                            for r in resp["SecurityGroupRules"][:50]]
 
-        # Flag missing egress rules — this is critical
+        # Flag missing rules — these are critical misconfigurations
         if sg_id:
             has_egress = any(r["direction"] == "outbound" for r in rules)
+            has_ingress = any(r["direction"] == "inbound" for r in rules)
             if not has_egress:
-                rules.append({"WARNING": f"Security Group {sg_id} has NO EGRESS (outbound) rules — ALL outbound traffic is BLOCKED. This is likely a misconfiguration causing connectivity failures."})
+                rules.append({"WARNING": f"Security Group {sg_id} has NO EGRESS (outbound) rules — ALL outbound traffic is BLOCKED."})
+            if not has_ingress:
+                rules.append({"WARNING": f"Security Group {sg_id} has NO INGRESS (inbound) rules — ALL inbound traffic is BLOCKED."})
 
         return json.dumps(rules, default=str)
     except Exception as e:
