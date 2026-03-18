@@ -63,17 +63,19 @@ When calling any tool, you MUST provide a 'reason' parameter explaining:
 WRITER_PROMPT = """You are an RCA Report Writer. Write the report in Korean (한국어).
 Keep technical terms, product names, and service names in English (e.g. CloudWatch, Security Group, ALB, EC2, RDS).
 
-Return ONLY valid JSON (no markdown, no explanation):
+You will receive raw investigation data from the Collector. Your job is to ANALYZE this data and produce a structured report — do NOT copy raw API responses into the report.
+
+Return ONLY valid JSON (no markdown, no code fences, no explanation):
 {
-  "summary": "1-2 sentence root cause summary",
-  "timeline": [{"time": "ISO8601", "event": "description"}],
-  "root_cause": {"description": "...", "evidence": ["..."], "confidence": "HIGH|MEDIUM|LOW"},
-  "impact": {"affected_resources": ["..."], "service_impact": "..."},
+  "summary": "1-2 sentence root cause summary in Korean",
+  "timeline": [{"time": "ISO8601", "event": "description in Korean"}],
+  "root_cause": {"description": "detailed explanation in Korean", "evidence": ["specific evidence items"], "confidence": "HIGH|MEDIUM|LOW"},
+  "impact": {"affected_resources": ["resource IDs"], "service_impact": "description in Korean"},
   "recommended_actions": [
     {
       "action_id": "1",
       "priority": 1,
-      "description": "Human-readable description of the action",
+      "description": "Human-readable description in Korean",
       "command": "aws cli WRITE command with real resource IDs",
       "code": "boto3 Python WRITE code with real resource IDs",
       "risk_level": "LOW|MEDIUM|HIGH",
@@ -82,26 +84,23 @@ Return ONLY valid JSON (no markdown, no explanation):
   ]
 }
 
-CRITICAL rules for the report:
-- EVERY CLAIM MUST BE BACKED BY EVIDENCE from the collected data. Never assume, guess, or skip steps.
+CRITICAL FORMAT RULES:
+- Output MUST be a single valid JSON object. No markdown, no code fences, no text before or after.
+- summary and root_cause.description MUST be human-readable Korean sentences, NOT raw JSON/API data.
+- If the collected data is insufficient, still produce the JSON structure with what you have and set confidence to LOW.
+
+CRITICAL ANALYSIS RULES:
+- EVERY CLAIM MUST BE BACKED BY EVIDENCE from the collected data. Never assume or guess.
 - Trace the causal chain ONE STEP AT A TIME: A caused B, B caused C. Each step must have evidence.
-  - BAD: "SG outbound changed → RDS connection failed" (skipped the ALB→EC2 step)
-  - GOOD: "ALB SG outbound changed → ALB cannot send responses to EC2 → health check timeout → UNHEALTHY"
 - Clearly identify WHICH resource owns the changed configuration (e.g. "ALB Security Group" not just "Security Group")
-- Do NOT infer effects beyond what the evidence shows. If you only see Target.Timeout, say that — do not assume DB connectivity issues unless there is separate evidence for it.
+- Do NOT infer effects beyond what the evidence shows.
 
 CRITICAL rules for recommended_actions:
 - MINIMUM NECESSARY ACTIONS ONLY: Only include actions that directly fix the root cause of THIS alarm
 - DO NOT fix pre-existing issues unrelated to this alarm's root cause
 - DO NOT add preventive measures, monitoring improvements, or optimizations
-- DO NOT modify resources that are already working correctly
-- Each action must have a clear causal link: "this specific change caused the alarm, so reverting/fixing it resolves the alarm"
-- command and code MUST use supported remediation operations
-- All values must come from the collected investigation data — NEVER use placeholder or dummy values
-- If a command requires an identifier (rule ID, resource ARN, etc.), it must be present in the collected data
-- Use real resource IDs from the investigation
-- If the root cause is a configuration change, the action should REVERSE that specific change
-- Verify from collected evidence that the resource/setting is actually broken BEFORE recommending a fix"""
+- command and code MUST use real resource IDs from the investigation data — NEVER use placeholders
+- If the root cause is a configuration change, the action should REVERSE that specific change"""
 
 # --- Reviewer Agent prompt ---
 REVIEWER_PROMPT = """You are an RCA Report Quality Reviewer. Evaluate the RCA report against these criteria:
@@ -184,15 +183,21 @@ def run_rca(prompt: str) -> str:
     else:
         text = str(result)
 
-    # Extract JSON from markdown if present
+    # Extract JSON from markdown code fences if present
     if "```json" in text:
-        match = re.search(r'```json\s*(\{.*?\})\s*```', text, re.DOTALL)
+        match = re.search(r'```json\s*(\{.*\})\s*```', text, re.DOTALL)
         if match:
             text = match.group(1)
     elif "```" in text:
-        match = re.search(r'```\s*(\{.*?\})\s*```', text, re.DOTALL)
+        match = re.search(r'```\s*(\{.*\})\s*```', text, re.DOTALL)
         if match:
             text = match.group(1)
+
+    # Try to find the outermost JSON object if text has extra content
+    if not text.strip().startswith("{"):
+        match = re.search(r'\{.*"summary".*\}', text, re.DOTALL)
+        if match:
+            text = match.group(0)
 
     return text
 
@@ -387,7 +392,7 @@ def _rca_background(task_id, prompt, payload):
                 break
 
         if not isinstance(parsed, dict):
-            parsed = {"summary": str(parsed)[:500], "timeline": [], "root_cause": {"description": str(parsed)[:500], "evidence": [], "confidence": "LOW"}, "impact": {}, "recommended_actions": []}
+            parsed = {"summary": "RCA 분석이 완료되었으나 리포트 형식 변환에 실패했습니다.", "timeline": [], "root_cause": {"description": "리포트 파싱 실패 — 원본 데이터를 확인하세요.", "evidence": [str(parsed)[:300]], "confidence": "LOW"}, "impact": {}, "recommended_actions": []}
 
         report_data = {
             "report_id": report_id, "created_at": created_at, "workload": workload_name,
