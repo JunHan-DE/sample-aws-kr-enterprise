@@ -19,6 +19,7 @@ AWS의 AI/ML 서비스를 활용한 데모 및 샘플 코드 모음입니다. Am
 | [claude-code-telemetry-aws](./claude-code-telemetry-aws/) | Claude Code OpenTelemetry 텔레메트리 수집·분석 관측성 플랫폼. 이중 파이프라인(Prometheus 메트릭 + Athena 이벤트)으로 6개 Grafana 대시보드(80패널) 제공. 비용·사용량·성능 통합 모니터링 | Amazon Managed Prometheus, Amazon Managed Grafana, Athena, ECS Fargate, Kinesis Data Firehose |
 | [x86-to-graviton-with-aws-transform-custom](./x86-to-graviton-with-aws-transform-custom/) | AWS Transform Custom을 활용한 x86 Java 애플리케이션의 Graviton(ARM64) 전환 가이드. Spring Boot 3.2.1 샘플앱 대상, atx CLI v1.1.1 사용, 8단계 변환 프로세스 100% 완료 | AWS Transform Custom, Amazon EC2 (Graviton) |
 | [agentcore-aiops-demo](./agentcore-aiops-demo/) | LLM 기반 멀티 에이전트 AIOps 플랫폼. CloudWatch 알람 발생 시 Reflexion 패턴(Collector→Writer→Reviewer) RCA Graph가 자동으로 근본 원인을 분석하고 한국어 리포트를 생성. 사용자 승인 후 Executor Agent가 자동 복구 수행. WebSocket 채팅으로 자연어 인프라 조사 지원 | Bedrock AgentCore, Strands Agents, Bedrock Knowledge Base, OpenSearch Serverless, DynamoDB, Lambda, CloudFront |
+| [claude-code-bedrock-enterprise-blueprint](./claude-code-bedrock-enterprise-blueprint/) | Claude Code on Amazon Bedrock 엔터프라이즈 블루프린트. IAM Identity Center SSO 인증, LiteLLM Proxy 기반 LLM Gateway, Virtual Key 자동 생성/캐싱, 사용자별 예산 관리, CloudWatch 모니터링까지 엔드투엔드 인프라를 CDK NestedStack으로 구현 | Amazon Bedrock, IAM Identity Center, ECS Fargate, ALB, Aurora Serverless v2, DynamoDB, Lambda, API Gateway, CloudWatch |
 
 ## 참고 리소스
 
