@@ -1,0 +1,113 @@
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: cc-gateway-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./mysql/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u${MYSQL_USER}", "-p${MYSQL_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  litellm-postgres:
+    image: postgres:16
+    container_name: cc-gateway-litellm-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${LITELLM_POSTGRES_DB}
+      POSTGRES_USER: ${LITELLM_POSTGRES_USER}
+      POSTGRES_PASSWORD: ${LITELLM_POSTGRES_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - litellm-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${LITELLM_POSTGRES_USER} -d ${LITELLM_POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  litellm:
+    image: ghcr.io/berriai/litellm:main-latest
+    container_name: cc-gateway-litellm
+    restart: unless-stopped
+    depends_on:
+      litellm-postgres:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: ${LITELLM_DATABASE_URL}
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      GENERIC_CLIENT_ID: ${LITELLM_OKTA_CLIENT_ID}
+      GENERIC_CLIENT_SECRET: ${LITELLM_OKTA_CLIENT_SECRET}
+      GENERIC_SCOPE: ${LITELLM_OKTA_SCOPES:-openid email profile}
+      GENERIC_AUTHORIZATION_ENDPOINT: ${LITELLM_OKTA_DOMAIN}/oauth2/v1/authorize
+      GENERIC_TOKEN_ENDPOINT: ${LITELLM_OKTA_DOMAIN}/oauth2/v1/token
+      GENERIC_USERINFO_ENDPOINT: ${LITELLM_OKTA_DOMAIN}/oauth2/v1/userinfo
+      GENERIC_USER_ID_ATTRIBUTE: preferred_username
+      GENERIC_USER_EMAIL_ATTRIBUTE: email
+      GENERIC_USER_DISPLAY_NAME_ATTRIBUTE: name
+      GENERIC_USER_FIRST_NAME_ATTRIBUTE: given_name
+      GENERIC_USER_LAST_NAME_ATTRIBUTE: family_name
+      # AUTO_REDIRECT_UI_LOGIN_TO_SSO: true
+      OLLAMA_API_BASE: ${OLLAMA_API_BASE}
+      OLLAMA_MODEL: ${OLLAMA_MODEL}
+      AWS_REGION: ${AWS_REGION}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN}
+      BEDROCK_MODEL_ID: ${BEDROCK_MODEL_ID}
+    command:
+      - "--config"
+      - "/app/config.yaml"
+      - "--port"
+      - "4000"
+      - "--host"
+      - "0.0.0.0"
+    volumes:
+      - ./litellm/config.yaml:/app/config.yaml:ro
+    ports:
+      - "4000:4000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:4000/health/liveliness')"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+
+  reverse-proxy:
+    build:
+      context: ./reverse-proxy
+    container_name: cc-gateway-reverse-proxy
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+      litellm:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: mysql+pymysql://${MYSQL_USER}:${MYSQL_PASSWORD}@mysql:${MYSQL_PORT}/${MYSQL_DATABASE}
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthz')"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  mysql-data:
+  litellm-postgres-data:

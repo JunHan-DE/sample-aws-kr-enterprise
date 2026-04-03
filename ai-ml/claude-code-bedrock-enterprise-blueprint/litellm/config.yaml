@@ -1,24 +1,23 @@
-# LiteLLM 프로덕션 설정
-# Bedrock pass-through 모드로 Claude Code 요청을 Amazon Bedrock으로 전달
-
 model_list:
-  # Claude Opus 4.6
-  - model_name: us.anthropic.claude-opus-4-6-v1
+  - model_name: default-fast
     litellm_params:
-      model: bedrock/us.anthropic.claude-opus-4-6-v1
-      aws_region_name: us-east-1
+      model: openai/gpt-4o-mini
+      api_key: os.environ/OPENAI_API_KEY
 
-  # Claude Sonnet 4.6
-  - model_name: us.anthropic.claude-sonnet-4-6
+  - model_name: default-smart
     litellm_params:
-      model: bedrock/us.anthropic.claude-sonnet-4-6
-      aws_region_name: us-east-1
+      model: openai/gpt-4.1
+      api_key: os.environ/OPENAI_API_KEY
 
-  # Claude Haiku 4.5
-  - model_name: us.anthropic.claude-haiku-4-5-20251001-v1:0
+  - model_name: oss-local
     litellm_params:
-      model: bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0
-      aws_region_name: us-east-1
+      model: ollama/llama3.1
+      api_base: os.environ/OLLAMA_API_BASE
+
+  - model_name: bedrock-sonnet
+    litellm_params:
+      model: bedrock/apac.anthropic.claude-3-5-sonnet-20241022-v2:0
+      aws_region_name: os.environ/AWS_REGION
 
 general_settings:
   master_key: os.environ/LITELLM_MASTER_KEY
@@ -26,6 +25,4 @@ general_settings:
 
 litellm_settings:
   drop_params: true
-  callbacks:
-    - custom_callbacks.audit_logger
-    - custom_callbacks.cloudwatch_metrics
+  set_verbose: true

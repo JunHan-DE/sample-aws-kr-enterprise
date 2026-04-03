@@ -1,280 +1,324 @@
-# Claude Code on Bedrock — Enterprise Blueprint
+# Claude Code Gateway on LiteLLM
 
-Claude Code on Amazon Bedrock을 엔터프라이즈 환경에서 안전하게 운영하기 위한 구현 가이드 및 샘플 코드입니다. SSO 인증, LLM Gateway, 사용자별 예산 관리, 사용량 모니터링까지 엔드투엔드 인프라를 CDK로 구현합니다.
+로컬 우선 PoC를 위한 멀티-provider LLM 게이트웨이 샘플입니다. 이 프로젝트는 기존의 `AWS IAM Identity Center + Bedrock 전용` 구성에서 벗어나, `Okta SSO + Reverse Proxy + LiteLLM + MySQL` 조합으로 재설계되었습니다. 다만 LiteLLM OSS Proxy의 내부 Prisma 제약 때문에 LiteLLM 메타데이터 저장소로는 별도 PostgreSQL을 사용합니다.
 
-LLM Gateway는 [Claude Code 공식 문서](https://code.claude.com/docs/en/llm-gateway)에서 소개하고 있는 **LiteLLM Proxy**를 기반으로 구현했습니다. LiteLLM의 Bedrock pass-through, Virtual Key 기반 사용자 관리, 예산 추적 기능을 활용하며, 오픈소스 범위에서 제공되지 않는 SSO 연동은 IAM Identity Center + 커스텀 Token Service로 구현했습니다.
+핵심 원칙은 아래와 같습니다.
 
-개발자가 `aws sso login` 한번으로 인증하면, Token Service가 SSO 자격증명을 검증하고 LiteLLM Virtual Key를 자동 생성/반환합니다. Claude Code는 이 Virtual Key로 LLM Gateway를 통해 Amazon Bedrock의 Claude 모델을 호출합니다.
+- `Reverse Proxy`
+  - Okta 인증 상태 확인
+  - 세션 또는 내부 토큰 발급/검증
+  - 사용자/팀 식별
+  - audit log 기록
+- `LiteLLM OSS`
+  - OpenAI-compatible API 제공
+  - provider/model alias 관리
+  - virtual key, budget control, usage tracking
+  - OpenAI / Bedrock / Ollama 호출
+- `MySQL`
+  - audit log, 세션 메타데이터, 모델 카탈로그 등 애플리케이션 운영 데이터 저장
+- `PostgreSQL`
+  - LiteLLM OSS Proxy 내부 메타데이터 저장
 
-## 아키텍처
+## 현재 기본 아키텍처
 
-![High Level Architecture](docs/high-level-architecture.png)
+```text
+Client SDK / Claude Code SDK / OpenAI SDK
+            |
+            v
+     Reverse Proxy (FastAPI)
+       - Okta OIDC/SAML login
+       - session/internal token
+       - user/team extraction
+       - audit logging
+            |
+            v
+           LiteLLM
+       - OpenAI-compatible API
+       - model alias -> provider routing
+       - budget / usage / key management
+            |
+            +--> OpenAI
+            +--> Amazon Bedrock
+            +--> Ollama (ollama.coupangpay.net)
 
-| # | 단계 | 설명 |
-|---|------|------|
-| 1 | SSO Login | 개발자가 `aws sso login`으로 IAM Identity Center 인증 |
-| 2 | SigV4 서명 요청 | apiKeyHelper가 SSO 자격증명으로 Token Service(API Gateway) 호출 |
-| 3 | Virtual Key 캐시 조회 | Token Service가 DynamoDB에서 사용자의 Virtual Key 조회 |
-| 4 | Virtual Key 생성 | 캐시 미스 시 LiteLLM `/key/generate` API로 자동 생성 |
-| 5 | Virtual Key 인증 | Claude Code가 Virtual Key로 ALB → LiteLLM Gateway 접근 |
-| 6 | Bedrock InvokeModel | LiteLLM이 VPC Endpoint를 통해 Amazon Bedrock 호출 |
-| 7 | Virtual Key/Budget 관리 | LiteLLM이 Aurora PostgreSQL에서 사용자별 사용량/예산 추적 |
+MySQL
+  - auth_sessions
+  - audit_logs
+  - model_catalog
+  - provider_config
 
-## 인증 흐름 (상세)
-
+PostgreSQL
+  - LiteLLM proxy internal tables
 ```
-개발자 터미널
-  │
-  ├─ aws sso login
-  │   └─ 브라우저 → IAM Identity Center 로그인 (Username + Password)
-  │   └─ SSO 세션 토큰 발급 → ~/.aws/sso/cache/ 저장
-  │
-  ├─ claude (Claude Code 실행)
-  │   └─ apiKeyHelper (get-gateway-token.sh) 자동 호출
-  │       │
-  │       ├─ AWS_PROFILE에서 SSO 자격증명 export
-  │       │
-  │       ├─ Token Service 호출 (SigV4 서명)
-  │       │   └─ API Gateway (IAM Auth) → Lambda
-  │       │       ├─ requestContext.identity.userArn에서 username 추출
-  │       │       ├─ DynamoDB 캐시 조회 (USER#{username}/VIRTUAL_KEY)
-  │       │       │   ├─ 캐시 히트 → Virtual Key 즉시 반환
-  │       │       │   └─ 캐시 미스 → LiteLLM /key/generate → DynamoDB 캐싱 → 반환
-  │       │       └─ 응답: {"token": "sk-..."}
-  │       │
-  │       └─ Virtual Key를 stdout으로 반환
-  │
-  └─ Claude Code가 Virtual Key를 Bearer Token으로 사용
-      └─ ALB (HTTPS) → ECS/LiteLLM → Bedrock (InvokeModel)
-```
 
-## 동작 확인
+## 무엇이 바뀌었나
 
-### SSO 인증 없이 접근 시
-![Without SSO](docs/without_sso.png)
+- 기본 실행 경로를 AWS CDK 배포가 아닌 `Docker Compose 기반 local-first`로 전환
+- 인증을 IAM Identity Center에서 `Okta`로 전환
+- 표준 public API를 `OpenAI-compatible endpoint`로 전환
+- 사용자 모델 선택을 `LiteLLM model alias` 기반으로 전환
+- 기본 리전을 `ap-northeast-2`로 통일
+- 기존 AWS/CDK 자산은 참고용 `legacy` 취급
 
-### SSO 인증 후 정상 동작
-![With SSO](docs/with_sso.png)
+## 디렉터리 구조
 
-### 사용자별 예산 초과 시
-![Budget Error](docs/budget_error.png)
-
-## 기술 스택
-
-| 카테고리 | 기술 | 설명 |
-|----------|------|------|
-| IaC | AWS CDK v2 (TypeScript) | NestedStack 구조, 단일 배포 |
-| Gateway | LiteLLM Proxy (공식 이미지) | `ghcr.io/berriai/litellm:main-latest` |
-| 컴퓨팅 | ECS Fargate (2 vCPU / 4 GB) | Private Subnet, ALB 연동 |
-| 로드밸런서 | ALB (HTTPS) | 자체서명 인증서, TLS 1.3, idle timeout 300s |
-| 인증 | IAM Identity Center + API Gateway IAM Auth | SSO -> SigV4 -> Virtual Key |
-| Token Service | Lambda (Python 3.12) | 첫 로그인 시 Virtual Key 자동 생성, DynamoDB 캐싱 |
-| DB (LiteLLM) | Aurora Serverless v2 (PostgreSQL 15.15) | 0.5~4 ACU, Isolated Subnet |
-| DB (감사/설정) | DynamoDB (PAY_PER_REQUEST) | Audit 테이블 + Config 테이블 |
-| 모니터링 | CloudWatch Dashboard + Alarms | ECS/ALB 메트릭, CPU/5xx 알람 |
-| 네트워크 | VPC (2 AZ, NAT GW 1개) | Bedrock VPC Endpoint, S3/DynamoDB Gateway Endpoint |
-| AI 모델 | Amazon Bedrock | Claude Opus 4.6, Sonnet 4.6, Haiku 4.5 |
-
-## 디렉토리 구조
-
-```
-claude-code-on-bedrock-enterprise-blueprint/
-├── bin/
-│   └── app.ts                           # CDK 앱 진입점 (RootStack)
-├── lib/
-│   ├── config/
-│   │   └── constants.ts                 # 프로젝트명, 모델 ID, 리전, 예산 기본값
-│   └── stacks/
-│       ├── root-stack.ts                # 루트 스택 (NestedStack 오케스트레이션)
-│       ├── network-stack.ts             # VPC, SG, VPC Endpoints
-│       ├── database-stack.ts            # Aurora Serverless v2
-│       ├── auth-stack.ts                # Token Service (Lambda + API Gateway)
-│       ├── gateway-stack.ts             # ALB + ECS Fargate + LiteLLM
-│       └── monitoring-stack.ts          # DynamoDB (Audit/Config), CloudWatch
-├── lambda/
-│   └── token-service/
-│       ├── handler.py                   # SSO ARN 파싱 -> Virtual Key 자동 생성/캐시 반환
-│       ├── requirements.txt
-│       └── tests/
-│           └── test_handler.py
+```text
+.
+├── docker-compose.yml
+├── .env.example
+├── litellm-postgres/
+│   └── Docker volume only
+├── mysql/
+│   └── init/
+│       └── 001-schema.sql
+├── reverse-proxy/
+│   ├── Dockerfile
+│   ├── app.py
+│   └── requirements.txt
 ├── litellm/
-│   ├── config.yaml                      # LiteLLM 설정 (참고용, 현재 기본 proxy 모드)
-│   ├── Dockerfile                       # 커스텀 이미지 (향후 콜백 사용 시)
-│   └── custom_callbacks/                # 감사 로그, CloudWatch 메트릭 콜백 (향후)
-│       ├── __init__.py
-│       ├── audit_logger.py
-│       └── cloudwatch_metrics.py
+│   ├── config.yaml
+│   └── custom_callbacks/
 ├── scripts/
-│   ├── get-gateway-token.sh             # apiKeyHelper - SSO -> Virtual Key 획득
-│   └── setup-developer.sh               # 개발자 온보딩 안내 스크립트
+│   ├── setup-developer.sh
+│   └── get-openai-token.sh
 ├── templates/
-│   ├── claude-settings.json             # Claude Code settings.json 템플릿
-│   └── aws-config-template.ini          # AWS CLI SSO 프로필 템플릿
-├── docs/
-│   ├── high-level-architecture.png     # 아키텍처 다이어그램
-│   ├── without_sso.png                 # SSO 미인증 시 에러 스크린샷
-│   ├── with_sso.png                    # SSO 인증 후 정상 동작 스크린샷
-│   ├── budget_error.png                # 예산 초과 에러 스크린샷
-│   ├── deployment-guide.md             # 배포 가이드
-│   ├── user-onboarding.md              # 사용자 온보딩 가이드
-│   ├── operations-guide.md             # 운영 가이드
-│   └── security.md                     # 보안 가이드
-├── cdk.json
-├── tsconfig.json
-├── package.json
-└── llm-gateway-guide.md                 # 전체 배포 가이드 (상세)
+│   ├── claude-settings.json
+│   └── aws-config-template.ini
+└── lib/, lambda/
+    └── 기존 AWS/CDK 자산 (legacy reference)
 ```
 
-## CDK 스택 구조 (NestedStack)
+## 빠른 시작
 
-```
-LlmGatewayStack (Root)
-├── Network    — VPC (2 AZ), Security Groups, VPC Endpoints (Bedrock, S3, DynamoDB)
-├── Database   — Aurora Serverless v2 (PostgreSQL 15.15, 0.5~4 ACU)
-│     └── depends on: Network
-├── Auth       — Token Service Lambda + API Gateway (IAM Auth)
-│     └── depends on: Network
-├── Gateway    — ECS Fargate + ALB (HTTPS) + LiteLLM Proxy
-│     └── depends on: Network, Database
-└── Monitoring — DynamoDB (Audit/Config), CloudWatch Dashboard
-      └── depends on: Gateway
-```
-
-## 사전 요구사항
-
-| 도구 | 버전 | 용도 |
-|------|------|------|
-| AWS CLI | v2 | SSO 로그인, 자격증명 관리 |
-| Node.js | 18+ | CDK 빌드, Claude Code 런타임 |
-| AWS CDK | v2 | 인프라 배포 |
-| Python | 3.12+ | Lambda 로컬 테스트 (선택) |
-
-AWS 계정 사전 요구사항:
-- AWS Organization + IAM Identity Center 활성화
-- Amazon Bedrock Claude 모델 사용 승인 (Opus 4.6, Sonnet 4.6, Haiku 4.5)
-- ACM 인증서 (ALB HTTPS용) 또는 자체서명 인증서
-
-## 배포
+### 1. 환경 변수 준비
 
 ```bash
-# 의존성 설치
-npm install
-
-# CDK Bootstrap (최초 1회)
-cdk bootstrap
-
-# 배포 (ACM 인증서 ARN 필수)
-cdk deploy LlmGatewayStack -c certificateArn=arn:aws:acm:us-east-1:123456789012:certificate/xxxxxxxx
+cp .env.example .env
 ```
 
-NestedStack 구조이므로 루트 스택 하나만 배포하면 모든 하위 스택(Network, Database, Auth, Gateway, Monitoring)이 함께 배포됩니다.
+필수 값:
 
-## 엔드포인트
+- `OKTA_ISSUER`
+- `OKTA_CLIENT_ID`
+- `OKTA_CLIENT_SECRET`
+- `SESSION_SECRET`
+- `TOKEN_SIGNING_SECRET`
+- `LITELLM_MASTER_KEY`
 
-배포 완료 후 다음 엔드포인트가 생성됩니다:
+Okta scope 기본값은 아래처럼 둡니다.
 
-| 엔드포인트 경로 | 설명 |
-|----------------|------|
-| `https://{ALB_DNS}/bedrock/*` | LiteLLM Bedrock pass-through (Claude Code 요청) |
-| `https://{ALB_DNS}/health/liveliness` | LiteLLM 헬스체크 |
-| `https://{ALB_DNS}/ui/` | LiteLLM Admin UI (Virtual Key 관리) |
-| `https://{API_GW_ID}.execute-api.{REGION}.amazonaws.com/v1/auth/token` | Token Service |
-| `https://{IDC_ID}.awsapps.com/start` | AWS Access Portal (SSO 로그인) |
+```env
+OKTA_SCOPES=openid profile email
+```
 
-## 사용자 온보딩
+`groups`는 scope가 아니라 claim으로 처리하는 것이 일반적이므로 `OKTA_SCOPES`에 넣지 않습니다. 그룹 정보가 필요하면 Okta authorization server에서 `groups` claim을 토큰에 추가하고 `OKTA_GROUP_CLAIM=groups`를 유지하세요.
 
-### 관리자 작업
+LiteLLM Admin UI에서 Okta SSO를 함께 쓰려면 아래 값도 채웁니다.
 
-1. **IAM Identity Center에서 사용자 생성** 및 그룹 할당
+```env
+LITELLM_SSO_TYPE=okta
+LITELLM_OKTA_DOMAIN=https://example.okta.com
+LITELLM_OKTA_CLIENT_ID=your-litellm-okta-client-id
+LITELLM_OKTA_CLIENT_SECRET=your-litellm-okta-client-secret
+LITELLM_OKTA_SCOPES=openid email profile
+```
 
-> Virtual Key는 개발자가 첫 SSO 로그인 시 Token Service에 의해 자동 생성됩니다. 관리자가 LiteLLM UI에서 키를 발급하거나 DynamoDB에 수동 등록할 필요가 없습니다.
+`OPENAI_API_KEY`는 `default-fast`, `default-smart` 같은 OpenAI backend alias를 실제로 호출할 때만 필요합니다. 브라우저에서 `/auth/cli-token` 페이지로 발급받는 토큰과는 다른 값입니다.
 
-### 개발자 작업
+선택 값:
 
-1. **AWS CLI SSO 프로필 설정** (`~/.aws/config`)
+- `OPENAI_API_KEY`
+- `AWS_ACCESS_KEY_ID`
+- `AWS_SECRET_ACCESS_KEY`
+- `AWS_SESSION_TOKEN`
+- `BEDROCK_MODEL_ID`
+- `OLLAMA_API_BASE`
 
-   프로덕션 환경에서는 모든 개발자가 동일한 프로필(`claude-code`)을 사용합니다. 사용자 구분은 프로필이 아닌 브라우저에서의 SSO 로그인 시 각자의 계정으로 수행합니다.
+## 2. 로컬 스택 기동
 
-   ```ini
-   [profile claude-code]
-   sso_session = my-sso
-   sso_account_id = {ACCOUNT_ID}
-   sso_role_name = ClaudeCodeUser
-   region = us-east-1
-   output = json
+```bash
+docker compose up --build
+```
 
-   [sso-session my-sso]
-   sso_start_url = https://{IDC_ID}.awsapps.com/start
-   sso_region = us-east-1
-   sso_registration_scopes = sso:account:access
-   ```
+기본 포트:
 
-2. **SSO 로그인**
-   ```bash
-   export AWS_PROFILE=claude-code
-   aws sso login
-   ```
-   브라우저가 열리면 각자의 IAM Identity Center 계정(사용자명/비밀번호)으로 로그인합니다.
+- Reverse Proxy: `http://localhost:8080`
+- LiteLLM: `http://localhost:4000`
+- LiteLLM Admin UI: `http://localhost:4000/ui/`
+- MySQL: `localhost:3306`
+- LiteLLM PostgreSQL: `localhost:5432`
 
-3. **Claude Code settings.json 설정** (`~/.claude/settings.json`)
-   ```json
-   {
-     "env": {
-       "CLAUDE_CODE_USE_BEDROCK": "1",
-       "ANTHROPIC_BEDROCK_BASE_URL": "https://{ALB_DNS}/bedrock",
-       "CLAUDE_CODE_SKIP_BEDROCK_AUTH": "1",
-       "AWS_REGION": "us-east-1",
-       "AWS_PROFILE": "claude-code",
-       "ANTHROPIC_DEFAULT_OPUS_MODEL": "us.anthropic.claude-opus-4-6-v1",
-       "ANTHROPIC_DEFAULT_SONNET_MODEL": "us.anthropic.claude-sonnet-4-6",
-       "ANTHROPIC_DEFAULT_HAIKU_MODEL": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
-       "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS": "1"
-     },
-     "apiKeyHelper": "path/to/scripts/get-gateway-token.sh"
-   }
-   ```
+## 3. Reverse Proxy 연동
 
-   > 자체서명 인증서 사용 시 `NODE_EXTRA_CA_CERTS` 환경변수로 인증서 경로를 지정해야 합니다.
+이 경로는 애플리케이션/SDK 사용자를 위한 public API 진입점입니다.
 
-4. **Claude Code 실행**
-   ```bash
-   claude
-   ```
+### 3.1 Reverse Proxy용 Okta 웹 로그인
 
-### apiKeyHelper 동작 방식
+브라우저에서 아래 URL로 접속합니다.
 
-`get-gateway-token.sh`는 `AWS_PROFILE` 환경변수를 기반으로 SSO 자격증명을 가져옵니다.
+```text
+http://localhost:8080/auth/login
+```
 
-- **프로덕션**: 모든 개발자가 `AWS_PROFILE=claude-code`를 사용합니다. 프로필은 SSO 인스턴스(시작 URL, 계정, 역할)를 찾는 키일 뿐이며, 실제 사용자 구분은 `aws sso login` 시 브라우저에서 로그인하는 계정에 의해 결정됩니다.
-- **테스트 환경**: 여러 사용자를 시뮬레이션할 때는 `AWS_PROFILE` 환경변수를 전환합니다.
-  ```bash
-  # 기본 사용자
-  export AWS_PROFILE=claude-code
-  aws sso login
+로그인이 성공하면 Reverse Proxy가 세션을 만들고 `/auth/cli-token`으로 이동합니다. 이 페이지에 표시되는 내부 bearer token을 CLI/SDK에서 사용합니다.
 
-  # 다른 사용자로 전환 (테스트용)
-  export AWS_PROFILE=claude-code-test1
-  aws sso login
-  ```
+### 3.2 CLI/SDK용 내부 토큰 발급
 
-## 환경변수 (Claude Code 설정)
+브라우저 로그인 후 `/auth/cli-token` 페이지에 표시되는 토큰을 아래 파일에 저장합니다.
 
-| 변수 | 값 | 설명 |
-|------|-----|------|
-| `CLAUDE_CODE_USE_BEDROCK` | `1` | Bedrock 통합 활성화 |
-| `ANTHROPIC_BEDROCK_BASE_URL` | `https://{ALB_DOMAIN}/bedrock` | Gateway Bedrock pass-through URL |
-| `CLAUDE_CODE_SKIP_BEDROCK_AUTH` | `1` | SigV4 인증 생략 (Gateway가 처리) |
-| `AWS_REGION` | `us-east-1` | AWS 리전 |
-| `AWS_PROFILE` | `claude-code` | SSO 프로필 (apiKeyHelper가 참조) |
-| `ANTHROPIC_DEFAULT_OPUS_MODEL` | `us.anthropic.claude-opus-4-6-v1` | Opus 모델 고정 |
-| `ANTHROPIC_DEFAULT_SONNET_MODEL` | `us.anthropic.claude-sonnet-4-6` | Sonnet 모델 고정 |
-| `ANTHROPIC_DEFAULT_HAIKU_MODEL` | `us.anthropic.claude-haiku-4-5-20251001-v1:0` | Haiku 모델 고정 |
+```bash
+mkdir -p ~/.claude
+printf '%s\n' 'PASTE_TOKEN_HERE' > ~/.claude/gateway-token
+```
 
-## 관련 문서
+그 다음 아래 명령으로 토큰을 읽어 SDK에서 사용합니다.
 
-| 문서 | 설명 |
-|------|------|
-| [Claude Code - LLM Gateway](https://code.claude.com/docs/en/llm-gateway) | Claude Code LLM Gateway 공식 문서 (LiteLLM 포함) |
-| [Claude Code on Amazon Bedrock](https://code.claude.com/docs/en/amazon-bedrock) | Claude Code on Bedrock 공식 문서 |
-| [Guidance for Claude Code with Amazon Bedrock](https://aws.amazon.com/solutions/guidance/claude-code-with-amazon-bedrock/) | AWS Solutions Library 가이던스 |
-| [LiteLLM - Bedrock Pass-through](https://docs.litellm.ai/docs/pass_through/bedrock) | LiteLLM Bedrock pass-through 문서 |
+```bash
+./scripts/get-openai-token.sh
+```
+
+### 3.3 OpenAI-compatible API 호출
+
+```bash
+export OPENAI_BASE_URL=http://localhost:8080/v1
+export OPENAI_API_KEY="$(./scripts/get-openai-token.sh)"
+```
+
+예시:
+
+```bash
+curl http://localhost:8080/v1/models \
+  -H "Authorization: Bearer ${OPENAI_API_KEY}"
+```
+
+```bash
+curl http://localhost:8080/v1/chat/completions \
+  -H "Authorization: Bearer ${OPENAI_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "default-fast",
+    "messages": [
+      {"role": "user", "content": "hello"}
+    ]
+  }'
+```
+
+중요:
+
+- 여기서 `OPENAI_API_KEY`라는 셸 변수에는 Reverse Proxy가 발급한 내부 bearer token을 넣습니다.
+- 이 값은 LiteLLM/OpenAI provider가 사용하는 실제 provider secret과 다릅니다.
+- `default-fast`, `default-smart`를 쓰려면 서버 `.env`의 `OPENAI_API_KEY`에도 실제 OpenAI 키가 있어야 합니다.
+
+## 제공 모델 alias
+
+초기 LiteLLM 설정은 아래 alias를 제공합니다.
+
+- `default-fast` -> OpenAI 기본 빠른 모델
+- `default-smart` -> OpenAI 기본 고성능 모델
+- `oss-local` -> Ollama endpoint
+- `bedrock-sonnet` -> Bedrock Claude 계열 예시
+
+실제 backend 매핑은 [litellm/config.yaml](/Users/ME/Desktop/Codebase/sample-aws-kr-enterprise/ai-ml/claude-code-bedrock-enterprise-blueprint/litellm/config.yaml)에서 조정합니다.
+
+### 3.4 Reverse Proxy 인증 흐름
+
+1. `/auth/login`에서 Okta 로그인으로 리다이렉트
+2. `/auth/callback`에서 authorization code를 처리
+3. 사용자와 그룹/팀 정보를 세션에 저장
+4. 세션 기반으로 `/auth/cli-token` 페이지에서 내부 bearer token 확인
+5. API 요청 시 Reverse Proxy가 토큰 검증 후 LiteLLM에 사용자 컨텍스트 전달
+
+LiteLLM으로 전달되는 내부 헤더:
+
+- `X-User-Id`
+- `X-User-Email`
+- `X-Team-Id`
+- `X-Session-Id`
+- `X-Audit-Id`
+
+## 4. LiteLLM Admin UI 연동
+
+이 경로는 운영자/관리자가 LiteLLM Admin UI에 로그인하는 흐름입니다. Reverse Proxy의 `/auth/login`과는 별도입니다.
+
+현재 프로젝트에서는 `LITELLM_OKTA_*` 값을 Docker Compose에서 LiteLLM의 generic SSO 변수로 매핑해 Okta SSO를 연결합니다.
+
+### 4.1 LiteLLM Admin UI용 Okta 설정
+
+`.env`에 아래 값을 채웁니다.
+
+```env
+LITELLM_SSO_TYPE=okta
+LITELLM_OKTA_DOMAIN=https://example.okta.com
+LITELLM_OKTA_CLIENT_ID=your-litellm-okta-client-id
+LITELLM_OKTA_CLIENT_SECRET=your-litellm-okta-client-secret
+LITELLM_OKTA_SCOPES=openid email profile
+```
+
+현재 Docker Compose는 위 값을 LiteLLM이 읽는 아래 generic SSO 값으로 넘깁니다.
+
+- `GENERIC_CLIENT_ID`
+- `GENERIC_CLIENT_SECRET`
+- `GENERIC_AUTHORIZATION_ENDPOINT`
+- `GENERIC_TOKEN_ENDPOINT`
+- `GENERIC_USERINFO_ENDPOINT`
+
+### 4.2 LiteLLM Admin UI용 Okta 웹 로그인
+
+브라우저에서 아래 주소로 접속합니다.
+
+```text
+http://localhost:4000/ui/
+```
+
+LiteLLM UI가 SSO 설정을 감지하면 로그인 흐름에서 `/sso/key/generate`를 통해 Okta authorize endpoint로 이동합니다.
+
+직접 확인용 엔드포인트:
+
+```text
+http://localhost:4000/sso/key/generate
+```
+
+현재 로컬 검증 기준으로 위 엔드포인트는 Okta authorize URL로 `303` 리다이렉트되며, LiteLLM의 `/sso/readiness`도 healthy 상태입니다.
+
+### 4.3 LiteLLM Admin UI Okta 앱 설정 시 주의사항
+
+- `redirect_uri`는 LiteLLM callback URL인 `http://localhost:4000/sso/callback`을 허용해야 합니다.
+- `LITELLM_OKTA_DOMAIN`은 실제 Okta authorization server 기준으로 맞춰야 합니다.
+- Okta org authorization server를 쓰면 예시는 `https://your-org.okta.com` 입니다.
+- Okta custom authorization server를 쓰면 예시는 `https://your-org.okta.com/oauth2/default` 입니다.
+
+예를 들어 custom authorization server를 쓰는데 `LITELLM_OKTA_DOMAIN=https://your-org.okta.com` 만 넣으면 LiteLLM은 `.../oauth2/v1/*`를 사용합니다. 반대로 `https://your-org.okta.com/oauth2/default` 를 넣으면 `.../oauth2/default/v1/*`를 사용합니다.
+
+## 저장소 구성
+
+애플리케이션 기준 운영 데이터는 MySQL에 저장합니다.
+
+- `auth_sessions`
+- `audit_logs`
+- `model_catalog`
+- `provider_config`
+
+LiteLLM 자체 테이블은 별도 PostgreSQL 컨테이너를 사용합니다. 이는 LiteLLM OSS Proxy가 현재 Prisma datasource를 PostgreSQL로 기대하기 때문입니다.
+
+## Claude Code SDK / 기타 SDK 연동
+
+이 프로젝트는 특정 Claude provider에 종속되지 않습니다. `Claude Code SDK`도 여기서는 단지 클라이언트 SDK이며, 표준 public API는 OpenAI-compatible endpoint입니다.
+
+권장 방식:
+
+- base URL: `http://localhost:8080/v1`
+- API key: Reverse Proxy가 발급한 내부 bearer token
+- model: LiteLLM alias (`default-fast`, `oss-local`, `bedrock-sonnet` 등)
+
+즉 `Claude Code / SDK -> Reverse Proxy -> LiteLLM` 흐름에서는 사용자별 고유 토큰은 Reverse Proxy가 발급한 내부 bearer token이고, 실제 OpenAI/Bedrock/Ollama provider credential은 서버 측에서 중앙 관리합니다.
+
+## Legacy 자산
+
+기존 아래 자산은 더 이상 기본 경로가 아닙니다.
+
+- `lib/stacks/*`
+- `lambda/token-service/*`
+- `scripts/get-gateway-token.sh`
+- 기존 Bedrock/IAM Identity Center 문서
+
+필요 시 참고용으로만 유지합니다.

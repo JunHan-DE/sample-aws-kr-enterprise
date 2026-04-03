@@ -1,17 +1,22 @@
 {
-  "name": "claude-code-enterprise",
+  "name": "claude-code-gateway",
   "version": "0.1.0",
   "private": true,
   "bin": {
     "claude-code-enterprise": "bin/app.js"
   },
   "scripts": {
+    "local:up": "docker compose up --build",
+    "local:down": "docker compose down",
+    "local:logs": "docker compose logs -f",
     "build": "tsc",
     "watch": "tsc -w",
     "cdk": "cdk",
     "synth": "cdk synth",
     "deploy": "cdk deploy",
-    "diff": "cdk diff"
+    "diff": "cdk diff",
+    "legacy:deploy": "cdk deploy",
+    "legacy:diff": "cdk diff"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
